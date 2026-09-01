@@ -325,6 +325,85 @@ data/
 
 ---
 
+## Intégrations aval
+
+Snoopit ne doit pas devenir un système de RAG, une base de connaissances ou un moteur d’analyse métier.
+
+Sa responsabilité s’arrête à :
+
+```text
+discovery
+→ navigation
+→ collecte
+→ mémoire de visite
+→ détection de changements
+→ provenance
+→ artifacts
+```
+
+Les artifacts produits peuvent ensuite être consommés par d’autres systèmes.
+
+### Intégration avec un système de RAG ou de mémoire
+
+Une collecte Snoopit peut devenir automatiquement une source d’ingestion pour un système externe tel que 2ndBrAIn.
+
+Exemple :
+
+```text
+site source
+   ↓
+Snoopit
+   ↓
+document + metadata + provenance + hash
+   ↓
+pipeline d’ingestion
+   ↓
+2ndBrAIn / RAG / moteur de recherche
+```
+
+Snoopit doit fournir suffisamment de métadonnées pour permettre au système aval de :
+
+* identifier la source originale ;
+* détecter si un contenu est nouveau ou modifié ;
+* éviter les réingestions inutiles ;
+* conserver un historique ;
+* relier plusieurs versions d’une même ressource.
+
+### Suivi longitudinal
+
+Pour des objets évolutifs comme des annonces immobilières, Snoopit peut maintenir la mémoire technique de visite :
+
+```text
+first_seen
+last_seen
+last_visited
+content_hash
+status
+source_url
+```
+
+Le système aval peut ensuite exploiter cette information pour produire des usages métier, par exemple :
+
+* annonce disparue ;
+* annonce modifiée ;
+* baisse ou hausse de prix ;
+* comparaison entre plusieurs portails ;
+* historique d’évolution d’un même bien.
+
+### Principe de découplage
+
+```text
+Snoopit
+= navigation + collecte + état de crawl + provenance
+
+Système aval
+= indexation + mémoire sémantique + comparaison + raisonnement métier
+```
+
+Un workflow ne doit donc pas dépendre directement d’un moteur RAG, d’une base vectorielle ou d’une application métier spécifique.
+
+---
+
 ## 9. Déploiement
 
 ```text
