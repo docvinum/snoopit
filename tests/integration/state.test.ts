@@ -286,6 +286,59 @@ describe('PageRepository', () => {
       `${URL_A}/due`,
     ]);
   });
+
+  it('can include gone pages, to notice a resource reappearing', () => {
+    // A delisted classified ad that comes back is a reference use case
+    // (docs/USE_CASES.md §3), so this must be a policy choice, not a hard rule.
+    const jobId = seedJob();
+    store.pages.recordVisit({
+      jobId,
+      url: `${URL_A}/ad`,
+      canonicalUrl: `${URL_A}/ad`,
+      nextVisitAfter: isoFromNow(-60_000),
+    });
+    store.pages.markGone(jobId, `${URL_A}/ad`, 404);
+
+    expect(store.pages.dueForRevisit(jobId, nowIso())).toHaveLength(0);
+    expect(
+      store.pages.dueForRevisit(jobId, nowIso(), { includeGone: true }).map((p) => p.canonicalUrl),
+    ).toEqual([`${URL_A}/ad`]);
+  });
+
+  it('brings a gone page back to life when it is found again', () => {
+    const jobId = seedJob();
+    const url = `${URL_A}/ad`;
+    store.pages.recordVisit({ jobId, url, canonicalUrl: url, contentHash: contentHash('v1') });
+    store.pages.markGone(jobId, url, 404);
+
+    const reappeared = store.pages.recordVisit({
+      jobId,
+      url,
+      canonicalUrl: url,
+      contentHash: contentHash('v2'),
+      httpStatus: 200,
+    });
+
+    expect(reappeared.page.status).toBe('changed');
+    expect(reappeared.changed).toBe(true);
+    // Two visits, not three: marking a page gone is not itself a visit.
+    expect(reappeared.page.visitCount).toBe(2);
+    // The original discovery date survives disappearance and return.
+    expect(reappeared.page.firstSeenAt).toBe(store.pages.get(jobId, url)!.firstSeenAt);
+  });
+
+  it('respects the revisit limit', () => {
+    const jobId = seedJob();
+    for (let i = 0; i < 5; i += 1) {
+      store.pages.recordVisit({
+        jobId,
+        url: `${URL_A}/${String(i)}`,
+        canonicalUrl: `${URL_A}/${String(i)}`,
+        nextVisitAfter: isoFromNow(-60_000),
+      });
+    }
+    expect(store.pages.dueForRevisit(jobId, nowIso(), { limit: 2 })).toHaveLength(2);
+  });
 });
 
 describe('FrontierRepository', () => {

@@ -209,8 +209,19 @@ export class PageRepository {
     ).map(toPage);
   }
 
-  /** Pages whose `next_visit_after` has come due. Drives scheduled revisits. */
-  dueForRevisit(jobId: string, at: string = nowIso(), limit = 100): Page[] {
+  /**
+   * Pages whose `next_visit_after` has come due. Drives scheduled revisits.
+   *
+   * `gone` pages are excluded by default — a 404 is usually final. They can be
+   * included on demand, because some jobs need to notice a resource *reappearing*
+   * (a delisted classified ad that comes back). Which of the two a job wants is a
+   * scheduling policy, decided in Lot 4, not something to hard-code here.
+   */
+  dueForRevisit(
+    jobId: string,
+    at: string = nowIso(),
+    options: { readonly limit?: number; readonly includeGone?: boolean } = {},
+  ): Page[] {
     return (
       this.db
         .prepare(
@@ -218,11 +229,11 @@ export class PageRepository {
             WHERE job_id = ?
               AND next_visit_after IS NOT NULL
               AND next_visit_after <= ?
-              AND status != 'gone'
+              AND (? = 1 OR status != 'gone')
             ORDER BY next_visit_after
             LIMIT ?`,
         )
-        .all(jobId, at, limit) as PageRow[]
+        .all(jobId, at, options.includeGone === true ? 1 : 0, options.limit ?? 100) as PageRow[]
     ).map(toPage);
   }
 

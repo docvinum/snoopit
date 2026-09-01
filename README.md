@@ -76,7 +76,7 @@ preuve que l'abstraction `BrowserBackend` tient.
 
 ---
 
-## Deux cas d'usage
+## Deux types de workflow
 
 **`audit`** — visiter un site et produire un rapport : statuts HTTP, liens cassés,
 images manquantes, redirections inattendues, changements de structure.
@@ -111,6 +111,7 @@ utilisation minimale du LLM.
 
 | Document | Contenu |
 |---|---|
+| [`docs/USE_CASES.md`](docs/USE_CASES.md) | Cas d'usage de référence détaillés |
 | [`docs/BROWSER_AGENT_AUDIT.md`](docs/BROWSER_AGENT_AUDIT.md) | Audit de `zxcHolmes/browser-agent` et décision `fork` / `extraction` / `rewrite` |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture cible, décisions structurantes, modèle d'état |
 | [`docs/MVP.md`](docs/MVP.md) | Périmètre du MVP, test d'acceptation, séquence des lots |
