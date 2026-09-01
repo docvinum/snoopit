@@ -1,0 +1,6 @@
+name: mobile-chrome
+viewport: [390, 844]
+locale: fr-FR
+timezone: Europe/Paris
+deviceScaleFactor: 3
+mobile: true

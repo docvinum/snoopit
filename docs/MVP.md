@@ -71,7 +71,7 @@ du MVP. Livrables : `docs/BROWSER_AGENT_AUDIT.md`, `docs/ARCHITECTURE.md`, `docs
 
 ---
 
-### Lot 1 — Squelette et état
+### Lot 1 — Squelette et état ✅ *terminé*
 
 Structure du dépôt, TypeScript strict, ESLint + Prettier, Vitest, CI GitHub Actions.
 Chargement de configuration et secrets. Schéma SQLite avec migrations numérotées.
@@ -82,6 +82,10 @@ transitions d'état des pages sont couvertes ; `snoopit migrate` crée une base 
 
 **Aucun navigateur n'est requis pour ce lot** — c'est délibéré et c'est ce qui valide
 l'abstraction D3.
+
+**Livré** : 130 tests verts sans navigateur ni réseau ; `Store` + six repositories ;
+migrations immuables avec détection de dérive ; configuration validée sans secret ;
+CLI `migrate` / `status` / `canon`. Conventions dans `docs/CONVENTIONS.md`.
 
 ---
 

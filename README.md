@@ -25,17 +25,39 @@ Coding agent  ->  workflows versionnés  ->  Browser Runtime  ->  Chrome  ->  si
 
 ## État du projet
 
-**Lot 0 terminé — audit et décision architecturale.** L'implémentation démarre au Lot 1.
+**Lot 1 terminé — squelette, état persistant et outillage.** Le runtime navigateur arrive au Lot 2.
 
 | Lot | Contenu | Statut |
 |---|---|---|
 | 0 | Audit de `browser-agent`, décision, architecture cible, MVP | ✅ terminé |
-| 1 | Squelette, tooling, SQLite, modèles, tests initiaux | à venir |
+| 1 | Squelette, tooling, SQLite, modèles, tests initiaux | ✅ terminé |
 | 2 | Runtime navigateur minimal | à venir |
 | 3 | Premier workflow de bout en bout | à venir |
 | 4 | Scheduler, reprise, budgets | à venir |
 | 5 | Recovery (heuristiques, puis LLM) | à venir |
 | 6 | Déploiement et documentation agent | à venir |
+
+---
+
+## Démarrage
+
+```bash
+npm install
+npm run build
+
+cp snoopit.config.example.yaml snoopit.config.yaml   # optionnel : les défauts marchent
+node dist/cli/main.js migrate    # crée data/snoopit.db
+node dist/cli/main.js status     # configuration, version de schéma, jobs
+```
+
+Vérification complète (format, lint, typecheck, tests) :
+
+```bash
+npm run check
+```
+
+La suite de tests du Lot 1 s'exécute **sans navigateur et sans réseau** — c'est la
+preuve que l'abstraction `BrowserBackend` tient.
 
 ---
 
@@ -77,6 +99,7 @@ utilisation minimale du LLM.
 | [`docs/BROWSER_AGENT_AUDIT.md`](docs/BROWSER_AGENT_AUDIT.md) | Audit de `zxcHolmes/browser-agent` et décision `fork` / `extraction` / `rewrite` |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture cible, décisions structurantes, modèle d'état |
 | [`docs/MVP.md`](docs/MVP.md) | Périmètre du MVP, test d'acceptation, séquence des lots |
+| [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) | Outillage, règles TypeScript, frontières d'architecture, tests |
 
 ---
 

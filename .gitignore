@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ── snoopit ───────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+coverage/
+
+# Runtime state: the database, artifacts and run directories.
+data/
+
+# Local configuration; commit snoopit.config.example.yaml instead.
+snoopit.config.yaml
+.env

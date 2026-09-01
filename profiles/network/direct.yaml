@@ -1,0 +1,3 @@
+# Default: no proxy. Workflows never see proxy settings (spec §12).
+name: direct
+proxy: null
