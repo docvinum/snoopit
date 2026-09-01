@@ -20,6 +20,21 @@ Coding agent  ->  workflows versionnés  ->  Browser Runtime  ->  Chrome  ->  si
                                              +-- Artifacts & Rapports
                                              +-- LLM Recovery (exception)
 ```
+---
+
+## Cas d’usage de référence
+
+Snoopit est conçu pour automatiser des tâches de navigation web récurrentes lorsqu’une API n’existe pas, n’est pas suffisante ou ne donne pas accès au contenu recherché.
+
+Cas d’usage de référence :
+
+* **Collecte pour RAG** : récupérer automatiquement des contenus web, documents, PDF, images ou fichiers afin qu’ils puissent ensuite être ingérés par un système externe de RAG ou de gestion de connaissances.
+* **Veille de sites sources** : visiter régulièrement des sites de référence, détecter les nouveautés, identifier les changements et télécharger les nouvelles ressources publiées.
+* **Récupération périodique de fichiers** : automatiser l’accès à des fichiers ou datasets difficiles à obtenir via API, tout en conservant leur provenance et leur historique de collecte.
+* **Suivi d’annonces** : collecter de nouvelles annonces, mémoriser leur état, identifier celles qui ont disparu ou été modifiées, détecter des variations telles qu’une baisse de prix, et faciliter la comparaison entre plusieurs portails.
+* **Automatisation maintenable par agent** : les workflows Snoopit sont du code versionné, testable, reviewable et modifiable par des coding agents tels que Claude Code ou Codex.
+
+Snoopit reste responsable de la navigation, de la collecte, de la mémoire de visite et de la provenance. L’analyse métier, l’indexation sémantique et l’exploitation des contenus collectés restent du ressort des systèmes aval.
 
 ---
 
