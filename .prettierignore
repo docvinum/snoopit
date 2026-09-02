@@ -1,0 +1,13 @@
+dist
+node_modules
+data
+coverage
+package-lock.json
+
+# Prose is not formatted: Prettier's table alignment miscounts accented characters
+# and rewrites documents for no benefit. Markdown is reviewed by humans, not tools.
+*.md
+
+# Fixture content is test input, not source. Its whitespace is deliberate — the
+# extraction tests assert that irregular spacing is normalised away.
+tests/fixtures/

@@ -1,0 +1,6 @@
+# Browser profile: viewport, locale, timezone and a user-agent consistent with the
+# Chrome actually in use. This is not a fingerprint-spoofing engine (spec §11).
+name: desktop-chrome
+viewport: [1920, 1080]
+locale: fr-FR
+timezone: Europe/Paris

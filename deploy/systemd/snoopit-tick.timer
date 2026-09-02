@@ -1,0 +1,18 @@
+# Wakes the scheduler regularly; the scheduler itself decides what is actually due.
+#
+# Ticking every 10 minutes is not the crawl frequency: a job with a daily schedule and
+# an 08:00–10:00 window still runs once, at its own jittered moment inside that window.
+# Frequent ticks only make the window resolution finer.
+
+[Unit]
+Description=snoopit — scheduler tick
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+# Catch up after downtime rather than silently skipping a window.
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,34 @@
+# snoopit configuration — copy to `snoopit.config.yaml` and adjust.
+#
+# This file is safe to commit: it contains no secret. The LLM API key is referenced
+# by the *name* of an environment variable, never by its value.
+
+dataDir: ./data
+
+database:
+  # Relative paths resolve against dataDir.
+  path: snoopit.db
+
+browser:
+  # CDP endpoint of the persistent Chrome (decision D2 in docs/ARCHITECTURE.md).
+  # Loopback only. Never bind this to 0.0.0.0 — it grants full control of a browser
+  # that carries authenticated sessions.
+  cdpUrl: http://127.0.0.1:9222
+  defaultProfile: desktop-chrome
+  navigationTimeout: 30s
+
+llm:
+  # Any OpenAI-compatible endpoint. Used only for L2/L3 recovery, never nominally —
+  # a run that meets no surprise makes zero calls here. With no key set, recovery
+  # stops at L1, which is a supported configuration rather than a degraded one.
+  provider: openrouter
+  baseUrl: https://openrouter.ai/api/v1
+  model: anthropic/claude-sonnet-4.6
+  apiKeyEnv: SNOOPIT_LLM_API_KEY
+
+# Applied to any workflow that does not declare its own budget.
+defaultBudget:
+  maxPages: 100
+  maxDuration: 20m
+  maxLlmCalls: 3
+  maxErrors: 10

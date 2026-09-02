@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  # The main job runs without a browser. That is not a limitation to work around:
+  # it is the check that the BrowserBackend port holds (decision D3). If this job
+  # ever needs Chrome to pass, an abstraction has leaked.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test (no browser, no network)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # The same conformance suite, this time against a real Chrome attached over CDP —
+  # the production topology in miniature. Fixtures are served locally; no test ever
+  # touches a third-party site.
+  conformance-chrome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # The kill-and-resume acceptance test spawns the real CLI, so dist must exist.
+      - name: Build
+        run: npm run build
+
+      - name: Start a persistent Chrome with CDP on loopback
+        run: |
+          google-chrome \
+            --headless=new \
+            --disable-gpu \
+            --no-sandbox \
+            --disable-dev-shm-usage \
+            --remote-debugging-port=9222 \
+            --user-data-dir="${RUNNER_TEMP}/chrome-profile" \
+            about:blank &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9222/json/version > /dev/null; then
+              echo "Chrome is up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Chrome did not expose its CDP endpoint in time"; exit 1
+
+      - name: Conformance and end-to-end runs against real Chrome
+        run: npx vitest run tests/integration/backend-conformance.test.ts tests/integration/cdp-only.test.ts tests/e2e
