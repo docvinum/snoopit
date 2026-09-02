@@ -8,17 +8,17 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
-develop-eggs/
-dist/
+/build/
+/develop-eggs/
+/dist/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -72,7 +72,7 @@ docs/_build/
 
 # PyBuilder
 .pybuilder/
-target/
+/target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -150,8 +150,8 @@ activemq-data/
 .env
 .envrc
 .venv
-env/
-venv/
+/env/
+/venv/
 ENV/
 env.bak/
 venv.bak/
@@ -217,8 +217,13 @@ __marimo__/
 .streamlit/secrets.toml
 
 # ── snoopit ───────────────────────────────────────────────────────────────────
+#
+# Note: the directory patterns inherited from the Python template above are anchored
+# with a leading slash. Unanchored, `downloads/` matched `src/runtime/downloads/` and
+# silently kept a whole module out of every commit for five lots. `tests/unit/repo-hygiene.test.ts`
+# now fails if any source file becomes ignored again.
 node_modules/
-dist/
+/dist/
 coverage/
 
 # Runtime state: the database, artifacts and run directories.
