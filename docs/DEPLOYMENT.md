@@ -152,6 +152,15 @@ ExecStart=/usr/bin/xvfb-run -a --server-args="-screen 0 1920x1080x24" \
 `--disable-dev-shm-usage` est présent parce que `/dev/shm` est souvent trop petit sur
 un serveur ; sans lui, Chrome meurt sur les pages lourdes.
 
+`--no-sandbox` est présent parce que l'unit ferme les deux voies du sandbox interne
+de Chrome : `NoNewPrivileges=true` neutralise le helper setuid `chrome-sandbox`, et
+Ubuntu 24.04 bloque le sandbox par namespaces pour les processus non confinés
+(`kernel.apparmor_restrict_unprivileged_userns=1`). Les deux fermées, Chrome avorte
+au démarrage sur `sandbox/linux/services/credentials.cc`. Le confinement qui compte
+ici est celui de l'unit — utilisateur `nologin` dédié, `ProtectSystem=strict`,
+`ProtectHome=true`, `PrivateTmp=true` — et un port CDP qui ne quitte jamais la
+boucle locale.
+
 ---
 
 ## 8. Mise à jour

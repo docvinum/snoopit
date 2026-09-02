@@ -22,8 +22,16 @@ Group=snoopit
 Environment=HOME=/var/lib/snoopit
 WorkingDirectory=/var/lib/snoopit
 
+# --no-sandbox: this unit sets NoNewPrivileges=true, which neutralises Chrome's
+# setuid chrome-sandbox helper, and Ubuntu 24.04 blocks the namespace sandbox for
+# unconfined processes (kernel.apparmor_restrict_unprivileged_userns=1). With both
+# paths closed Chrome aborts on startup (sandbox/linux/services/credentials.cc).
+# The containment that matters here is the unit's: a dedicated nologin user,
+# ProtectSystem=strict, ProtectHome=true, PrivateTmp=true, and a CDP port that
+# never leaves loopback.
 ExecStart=/usr/bin/google-chrome-stable \
   --headless=new \
+  --no-sandbox \
   --remote-debugging-address=127.0.0.1 \
   --remote-debugging-port=9222 \
   --user-data-dir=/var/lib/snoopit/chrome-profile \
