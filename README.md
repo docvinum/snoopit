@@ -61,8 +61,8 @@ npm install
 npm run build
 
 cp snoopit.config.example.yaml snoopit.config.yaml   # optionnel : les défauts marchent
-node dist/cli/main.js migrate    # crée data/snoopit.db
-node dist/cli/main.js status     # configuration, version de schéma, jobs
+node dist/src/cli/main.js migrate    # crée data/snoopit.db
+node dist/src/cli/main.js status     # configuration, version de schéma, jobs
 ```
 
 Lancer un workflow (exige un Chrome persistant joignable en CDP) :

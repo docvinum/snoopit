@@ -1,7 +1,8 @@
 # MVP et séquence des lots — `snoopit`
 
-> Établi au Lot 0. Voir `docs/BROWSER_AGENT_AUDIT.md` (décision) et
-> `docs/ARCHITECTURE.md` (conception).
+> Établi au Lot 0. Voir `docs/BROWSER_AGENT_AUDIT.md` (décision),
+> `docs/ARCHITECTURE.md` (conception) et `docs/USE_CASES.md` (cas d'usage de
+> référence que ce périmètre doit continuer à supporter).
 
 ---
 
