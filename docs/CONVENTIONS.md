@@ -48,7 +48,13 @@ Trois règles non négociables, dérivées de `docs/ARCHITECTURE.md` :
    `src/state/repositories/`. Le reste du code passe par un `Store`.
 2. **Seuls les adaptateurs parlent CDP.** Aucun workflow, aucune règle métier
    n'importe `playwright-core` ni ne construit une commande CDP. Tout passe par
-   `BrowserBackend` (Lot 2).
+   `BrowserBackend`. Un seul fichier importe `playwright-core` :
+   `src/runtime/browser/cdp.ts`.
+
+   La lib TypeScript `DOM` est activée — `playwright-core` en a besoin, et le code
+   évalué dans la page est du vrai code navigateur. Pour qu'elle ne fuie pas, une
+   règle ESLint `no-restricted-globals` interdit `window`, `document`, `navigator`
+   et `location` partout **sauf** dans `src/runtime/browser/{cdp,fake}.ts`.
 3. **Aucun secret dans un objet de configuration.** La clé LLM est désignée par le
    *nom* d'une variable d'environnement (`llm.apiKeyEnv`), lue à la demande par
    `llmApiKey()`. Un `apiKey` en clair dans le YAML est rejeté par le schéma.
@@ -74,6 +80,17 @@ Trois règles non négociables, dérivées de `docs/ARCHITECTURE.md` :
 - `tests/unit/` — fonctions pures et modules isolés. Ni navigateur, ni réseau, ni disque.
 - `tests/integration/` — plusieurs modules ensemble, sur SQLite `:memory:`.
 - `tests/e2e/` — parcours complets contre les fixtures HTML locales (Lot 3).
+
+**Conformité des backends** : `tests/integration/backend-conformance.test.ts` exécute
+un seul jeu de tests contre `FakeBackend` **et** `CdpBackend`. Les deux reçoivent un
+contenu identique au octet près, donc une divergence de résultat est une divergence
+des *backends*, jamais des fixtures. La moitié Chrome se saute proprement — et
+visiblement — quand aucun navigateur n'est joignable ; la CI l'exécute dans un job
+dédié.
+
+Une différence légitime entre les deux (le fake n'a ni horloge ni layout) est
+**nommée dans un test dédié** (`tests/integration/cdp-only.test.ts`), jamais tolérée
+en silence.
 
 **Aucun test ne touche un site tiers** (spec §19). Un test qui exigerait un vrai
 navigateur pour valider de la logique métier signale une fuite d'abstraction, pas un

@@ -40,13 +40,13 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 
 ## État du projet
 
-**Lot 1 terminé — squelette, état persistant et outillage.** Le runtime navigateur arrive au Lot 2.
+**Lot 2 terminé — runtime navigateur minimal.** Le premier workflow de bout en bout arrive au Lot 3.
 
 | Lot | Contenu | Statut |
 |---|---|---|
 | 0 | Audit de `browser-agent`, décision, architecture cible, MVP | ✅ terminé |
 | 1 | Squelette, tooling, SQLite, modèles, tests initiaux | ✅ terminé |
-| 2 | Runtime navigateur minimal | à venir |
+| 2 | Runtime navigateur minimal | ✅ terminé |
 | 3 | Premier workflow de bout en bout | à venir |
 | 4 | Scheduler, reprise, budgets | à venir |
 | 5 | Recovery (heuristiques, puis LLM) | à venir |

@@ -1,7 +1,7 @@
 {
   "name": "snoopit",
   "version": "0.1.0",
-  "description": "Orchestrateur de visites web persistantes utilisant Chrome comme moteur d'ex\u00e9cution",
+  "description": "Orchestrateur de visites web persistantes utilisant Chrome comme moteur d'exécution",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
+    "linkedom": "^0.18.13",
+    "playwright-core": "^1.62.1",
     "yaml": "^2.7.0",
     "zod": "^3.24.1"
   },

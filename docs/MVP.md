@@ -89,7 +89,7 @@ CLI `migrate` / `status` / `canon`. Conventions dans `docs/CONVENTIONS.md`.
 
 ---
 
-### Lot 2 — Runtime navigateur minimal
+### Lot 2 — Runtime navigateur minimal ✅ *terminé*
 
 Port `BrowserBackend` + `CdpBackend` (`playwright-core` en `connectOverCDP`) +
 `FakeBackend`. Primitives : `open`, `navigate`, `wait`, `query`, `click`, `extract`,
@@ -100,6 +100,14 @@ avec hash et provenance.
 
 *Terminé quand* : les primitives fonctionnent contre les fixtures locales ; le même
 jeu de tests passe sur `FakeBackend` sans navigateur.
+
+**Livré** : port `BrowserBackend` + `CdpBackend` (`playwright-core` en
+`connectOverCDP`) + `FakeBackend` (DOM parsé). Suite de conformité unique de 59 tests
+exécutée contre **les deux backends**, dont un vrai Chrome attaché en CDP. Statut HTTP
+et chaîne de redirection remontés. Timeout explicite (`NavigationTimeoutError`).
+`isHumanInteractable` pur et partagé. Pipeline de téléchargement avec hash, provenance
+et chemins déterministes non évadables. 253 tests au total ; 105 passent sans
+navigateur.
 
 ---
 

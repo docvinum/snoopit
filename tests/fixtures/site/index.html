@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Publications — Site de test</title>
+  </head>
+  <body>
+    <!-- Cookie banner: dismissed by a deterministic heuristic, never by an LLM. -->
+    <div id="cookie-banner" class="overlay">
+      <p>Ce site utilise des cookies.</p>
+      <!-- Two mechanisms for one behaviour: the inline script is what a real
+           browser runs, and data-fake-hides is the fake backend's stand-in for it,
+           since a parsed DOM executes no script. Both backends must end up with a
+           hidden banner, which is what the conformance suite asserts. -->
+      <button id="accept-cookies" data-fake-hides="#cookie-banner">Accepter</button>
+    </div>
+
+    <h1>Publications</h1>
+
+    <ul class="publication-list">
+      <li class="publication">
+        <a class="title" href="/publications/rapport-2026.html">Rapport annuel 2026</a>
+        <span class="date">2026-03-14</span>
+        <a class="download" href="/publications/rapport-2026.pdf">PDF</a>
+      </li>
+      <li class="publication">
+        <a class="title" href="/publications/etude-marche.html">Étude de marché</a>
+        <span class="date">2026-05-02</span>
+        <a class="download" href="/publications/etude-marche.pdf">PDF</a>
+      </li>
+      <li class="publication">
+        <a class="title" href="/publications/note-technique.html">
+          Note      technique
+        </a>
+        <span class="date">2026-07-21</span>
+        <!-- No PDF: extraction must yield null, not throw. -->
+      </li>
+    </ul>
+
+    <nav>
+      <a id="next-page" href="/page-2.html">Page suivante</a>
+      <a id="broken-link" href="/missing.html">Lien cassé</a>
+      <a id="redirected" href="/old-address.html">Ancienne adresse</a>
+      <a id="external" href="https://example.com/elsewhere">Site externe</a>
+    </nav>
+
+    <img id="present-image" src="/assets/logo.png" alt="Logo" />
+    <img id="missing-image" src="/assets/absent.png" alt="Absente" />
+
+    <!-- Elements a person cannot interact with. Not honeypots to defeat: things to
+         leave alone, because touching them means the workflow has drifted. -->
+    <div id="not-interactable">
+      <button id="hidden-display" style="display:none">Invisible</button>
+      <button id="hidden-visibility" style="visibility:hidden">Masqué</button>
+      <button id="zero-size" data-fake-width="0" data-fake-height="0" style="width:0;height:0;padding:0;border:0;overflow:hidden">Minuscule</button>
+      <button id="aria-hidden-button" aria-hidden="true">Hors accessibilité</button>
+      <button id="disabled-button" disabled>Désactivé</button>
+      <div inert><button id="inert-button">Inerte</button></div>
+      <button id="no-pointer" style="pointer-events:none">Sans pointeur</button>
+    </div>
+
+    <button id="real-button">Bouton normal</button>
+
+    <script>
+      document.getElementById('accept-cookies').addEventListener('click', function () {
+        document.getElementById('cookie-banner').style.display = 'none';
+      });
+    </script>
+  </body>
+</html>
