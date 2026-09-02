@@ -1,0 +1,148 @@
+%% snoopit — pipeline du chemin critique
+%% Point d'entrée : `snoopit tick` (src/cli/main.ts:212 cmdTick), ce que lance
+%% snoopit-tick.service en production.
+%% Granularité : un nœud par fichier (chemin critique ~50 fonctions → niveau fichier).
+%% Les nœuds marqués (détail) ont un diagramme dédié — voir les `click` en bas.
+%% Labels : fichier:ligne de la fonction d'entrée du fichier sur ce chemin.
+
+flowchart TD
+
+  %% ── Entrée ────────────────────────────────────────────────────────────────
+  subgraph CLI["Entrée CLI"]
+    tick["cli/main.ts:212<br/>cmdTick()"]
+  end
+
+  %% ── Config & ouverture de l'état ──────────────────────────────────────────
+  subgraph BOOT["Config & état"]
+    loadcfg["config/load.ts:71<br/>loadConfig()"]
+    db["state/db.ts:41<br/>openDatabase() · migrate()"]
+    store["state/store.ts:16<br/>Store.open()"]
+  end
+
+  %% ── Ordonnancement : qu'est-ce qui est dû ? ───────────────────────────────
+  subgraph SCHED["Ordonnancement"]
+    due["scheduler/scheduler.ts:53<br/>dueJobs() → evaluateJobs()"]
+    window["scheduler/window.ts:212<br/>isDue() · pagesForRun() &nbsp;(détail)"]
+  end
+
+  %% ── Pour chaque job dû : charger, attacher ────────────────────────────────
+  subgraph ATTACH["Chargement & attache (boucle sur les jobs dus)"]
+    loadwf["workflow/load.ts:43<br/>loadWorkflow() — import dynamique"]
+    provider["recovery/llm/from-config.ts:21<br/>providerFromConfig()"]
+    connect["browser/cdp.ts:344<br/>CdpBackend.connect() — connectOverCDP"]
+  end
+
+  %% ── Cycle de vie d'un run ─────────────────────────────────────────────────
+  subgraph RUN["Cycle de vie du run — workflow/runner.ts:75 runWorkflow() (détail)"]
+    reclaim["reprise : runs.findStale/markAbandoned<br/>frontier.reclaimAbandonedLeases()"]
+    startrun["runs.start() · mkdir(runDir)<br/>downloads/paths.ts:103"]
+    emitter["events/emitter.ts:53<br/>RunEventEmitter — SQLite + events.jsonl"]
+    heartbeat["setInterval → runs.heartbeat()"]
+    guard["budget/guard.ts:56<br/>BudgetGuard"]
+    ctxbuild["workflow/context.ts:59<br/>new RunContext()"]
+    invoke["definition.run(ctx)<br/>— le workflow, workflows/*.ts"]
+    settle["catch Budget/Blocked/erreur<br/>frontier.release() · runs.finish()"]
+    report["outputs/report.ts:64<br/>buildReport() → report.md / report.json"]
+  end
+
+  %% ── Primitives appelées par le workflow ───────────────────────────────────
+  subgraph PRIM["Primitives workflow — workflow/context.ts (détail)"]
+    visit["ctx.visit() &nbsp;context.ts:93"]
+    frontier["ctx.frontier.* &nbsp;discover/take/complete<br/>+ scheduler/revisit.ts:44 enqueueDueRevisits"]
+    extract["ctx.extract()"]
+    dismiss["ctx.dismissOverlays()"]
+    recover["ctx.recover() &nbsp;context.ts:348"]
+    artifacts["ctx.artifacts.collect / writeJson / screenshot"]
+  end
+
+  %% ── Navigateur réel ───────────────────────────────────────────────────────
+  subgraph BROWSER["Navigateur — CDP (le seul point d'import playwright-core)"]
+    cdppage["browser/cdp.ts:140<br/>CdpPage: navigate/waitForReady/extractAll/fetch/screenshot &nbsp;(détail)"]
+    canonical["navigation/canonical.ts:119<br/>canonicalizeUrl() — identité de page"]
+    interact["browser/interactable.ts:71<br/>isHumanInteractable()"]
+    specparse["extraction/spec.ts<br/>parseExtractSpec()"]
+    chrome(["Chrome persistant<br/>127.0.0.1:9222 — profil authentifié"])
+  end
+
+  %% ── Recovery (exception, hors chemin nominal) ─────────────────────────────
+  subgraph REC["Recovery — exception, jamais nominal"]
+    recfn["recovery/recover.ts:216<br/>recover() — L1→L2→L3→L4 &nbsp;(détail)"]
+    heur["recovery/heuristics.ts:233<br/>dismissOverlays() · collectControls()"]
+    block["recovery/blocking.ts:95<br/>detectBlocking() → BlockedError"]
+    llm["recovery/llm/openai-compatible.ts:50<br/>OpenAiCompatibleProvider.complete()"]
+  end
+
+  %% ── Collecte de fichiers ──────────────────────────────────────────────────
+  subgraph COLLECT["Collecte de fichiers"]
+    download["downloads/download.ts:61<br/>downloadTo() — fetch, vérifie, écrit"]
+    hash["util/hash.ts<br/>contentHash() — dédup par contenu"]
+  end
+
+  %% ── Persistance ───────────────────────────────────────────────────────────
+  subgraph STATE["Persistance — SQLite (source de vérité)"]
+    repos["state/repositories/*<br/>jobs · runs · pages · frontier · artifacts · events"]
+  end
+
+  %% ── Sortie ────────────────────────────────────────────────────────────────
+  subgraph OUT["Sortie du run"]
+    files(["data/jobs/&lt;job&gt;/runs/&lt;run&gt;/<br/>report.md · report.json · events.jsonl<br/>+ artifacts/"])
+  end
+
+  %% ── Flux principal ───────────────────────────────────────────────────────
+  tick --> loadcfg --> db --> store --> due
+  due --> window
+  due -->|"job dû + pagesPerRun"| loadwf --> provider --> connect --> reclaim
+  connect -.-> chrome
+
+  reclaim --> startrun --> emitter --> heartbeat --> guard --> ctxbuild --> invoke
+  invoke --> settle --> report --> files
+
+  invoke --> visit
+  invoke --> frontier
+  invoke --> extract
+  invoke --> dismiss
+  invoke --> recover
+  invoke --> artifacts
+
+  visit --> canonical
+  visit --> cdppage
+  extract --> cdppage
+  extract --> specparse
+  dismiss --> heur
+  artifacts --> download --> cdppage
+  download --> hash
+  cdppage -.->|"CDP"| chrome
+
+  recover --> recfn
+  recfn --> heur
+  recfn --> block
+  recfn --> interact
+  recfn --> llm
+
+  %% écritures d'état (tous les nœuds ci-dessous écrivent dans SQLite)
+  due --> repos
+  reclaim --> repos
+  startrun --> repos
+  emitter --> repos
+  settle --> repos
+  visit --> repos
+  frontier --> repos
+  artifacts --> repos
+  report --> repos
+
+  %% ── Navigation vers les diagrammes de détail ─────────────────────────────
+  click window "./window.mmd" "Détail : décision « est-ce dû ? »"
+  click recfn "./recover.mmd" "Détail : escalade de recovery L1→L4"
+  click cdppage "./cdp.mmd" "Détail : CdpPage / CdpBackend"
+  click visit "./context.mmd" "Détail : primitives du RunContext"
+  click frontier "./context.mmd" "Détail : primitives du RunContext"
+  click artifacts "./context.mmd" "Détail : primitives du RunContext"
+  click reclaim "./runner.mmd" "Détail : runWorkflow, ouverture/fermeture du run"
+  click settle "./runner.mmd" "Détail : runWorkflow, ouverture/fermeture du run"
+
+  classDef entry fill:#1d4ed8,color:#fff,stroke:#1e3a8a;
+  classDef ext fill:#374151,color:#fff,stroke:#111827;
+  classDef workflow fill:#065f46,color:#fff,stroke:#064e3b;
+  class tick entry;
+  class chrome,files ext;
+  class invoke workflow;

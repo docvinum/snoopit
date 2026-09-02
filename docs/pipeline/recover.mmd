@@ -1,0 +1,47 @@
+%% Détail — recovery : remettre un script sur ses rails
+%% Fichier : src/runtime/recovery/recover.ts (recover, ligne 216)
+%% Escalade monotone et budgétée. L'appel LLM est une exception, pas une étape :
+%% un run qui ne rencontre aucune surprise n'atteint jamais L2 (llmCalls=0 le prouve).
+
+flowchart TD
+  entry["recover.ts:216 recover(page, opts, deps)<br/>allowedActions ⊆ {click, scroll, close_overlay} · maxSteps · maxLevel"]
+
+  reached0{"recover.ts expectedStateReached()<br/>query(selector) + isHumanInteractable (interactable.ts:71)"}
+  noop["déjà dans l'état ⇒ retour immédiat (level: null)"]
+
+  notblocked["assertNotBlocked(page)<br/>BLOCKING_PROBE_SELECTORS → detectBlocking (blocking.ts:95)<br/>site qui refuse ⇒ throw BlockedError — jamais contourné, jamais réessayé"]
+
+  subgraph L1["L1 — déterministe, sans LLM"]
+    l1_dismiss["dismissOverlays(page) — heuristics.ts:233<br/>bannières cookies / modales"]
+    l1_scroll["si 'scroll' permis : page.scroll('bottom')"]
+    l1_check{"expectedStateReached ?"}
+  end
+
+  gate{"deps.llm présent ET maxLevel != L1 ?"}
+  l4["L4 — throw RecoveryFailedError<br/>(loggé, rapporté, le run s'arrête honnêtement)"]
+
+  subgraph L23["L2 (DOM) puis L3 (DOM + screenshot) — boucle maxSteps"]
+    digest["pageDigest(page)<br/>collectControls (heuristics.ts:201) filtrés isHumanInteractable, max 40<br/>+ titre + 1200 car. de texte visible"]
+    prompt["buildPrompt(goal, expected, allowed, digest)"]
+    llmcall["deps.onLlmCall() ⇒ budget.assertOk('llm') (throw si épuisé)<br/>llm.complete() — recovery/llm/openai-compatible.ts:50"]
+    parse["parseAction(reply) — JSON ; réponse malformée = étape ratée, jamais un crash"]
+    guardsel["action ∈ allowed ? selector ∈ contrôles offerts ?<br/>le modèle CHOISIT, il n'invente pas de sélecteur"]
+    apply["page.click(selector) | page.scroll('bottom')"]
+    l23_check{"expectedStateReached ?"}
+    providerfail["provider injoignable ⇒ dégrade en L4 (pas de retry inter-niveaux)"]
+  end
+
+  done["retour RecoveryOutcome { recovered:true, level, steps, llmCalls }"]
+
+  entry --> reached0
+  reached0 -->|oui| noop
+  reached0 -->|non| notblocked --> l1_dismiss --> l1_check
+  l1_check -->|non| l1_scroll --> l1_check
+  l1_check -->|oui| done
+  l1_check -->|"toujours non"| gate
+  gate -->|non| l4
+  gate -->|oui| digest --> prompt --> llmcall --> parse --> guardsel --> apply --> l23_check
+  l23_check -->|non, steps restants| digest
+  l23_check -->|oui| done
+  llmcall --> providerfail --> l4
+  l23_check -->|"L2 puis L3 épuisés"| l4
