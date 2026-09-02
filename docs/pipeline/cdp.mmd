@@ -1,0 +1,41 @@
+%% Détail — le backend navigateur de production
+%% Fichier : src/runtime/browser/cdp.ts
+%% Seul fichier du projet qui importe playwright-core. On s'attache à un Chrome
+%% déjà lancé et déjà authentifié ; on n'en lance jamais un jetable.
+
+flowchart TD
+
+  subgraph BACKEND["CdpBackend"]
+    connect["cdp.ts:344 connect({cdpUrl})<br/>chromium.connectOverCDP() · réutilise contexts()[0]"]
+    newpage["cdp.ts:364 newPage()<br/>context.newPage() · setViewportSize<br/>CDPSession: Network.enable + Network.setCacheDisabled<br/>(cache OFF : la détection de changement doit voir ce que le site sert maintenant)"]
+    open["cdp.ts:384 open(url) = newPage() + navigate()"]
+    bclose["cdp.ts:394 close() — détache seulement ; Chrome reste (service systemd)"]
+  end
+
+  subgraph PAGE["CdpPage"]
+    navigate["cdp.ts:140 navigate()<br/>page.goto(waitUntil:'load') · un timeout DOIT throw (NavigationTimeoutError)<br/>mémorise status + redirectChain (redirectedFrom())"]
+    waitready["cdp.ts:167 waitForReady()<br/>page.waitForLoadState(state) + waitForSelector(attached)"]
+    query["cdp.ts:205 query() / :215 queryAll() → snapshot()<br/>tagName·text·html·attributes + page.evaluate(measureElement)"]
+    extractall["cdp.ts:224 extractAll(spec)<br/>parseExtractSpec (côté nous) → page.evaluate(querySelectorAll)<br/>href/src résolus en absolu par le navigateur"]
+    click["cdp.ts:275 click()<br/>measureElement → isHumanInteractable (interactable.ts:71)<br/>refuse invisible / inert / aria-hidden / disabled ⇒ NotInteractableError"]
+    scroll["cdp.ts:293 scroll()"]
+    text["cdp.ts:306 text() = normalizeText(document.body.innerText)"]
+    shot["cdp.ts:310 screenshot()"]
+    fetch["cdp.ts:324 fetch(url)<br/>context.request.get() — mêmes cookies/auth que la page"]
+    pclose["cdp.ts:339 close() — page.close()"]
+  end
+
+  chrome(["Chrome persistant — 127.0.0.1:9222<br/>profil authentifié, supervisé par snoopit-chrome.service"])
+  measure["page.evaluate(measureElement) : mesure DANS la page<br/>(getComputedStyle, boxes) ; la DÉCISION reste dans interactable.ts"]
+
+  connect --> chrome
+  open --> newpage --> navigate --> chrome
+  navigate --> waitready
+  extractall --> chrome
+  query --> measure
+  click --> measure
+  fetch --> chrome
+  shot --> chrome
+
+  caller["Appelé par context.ts : visit()→open/waitForReady/query('title')/text ;<br/>extract()→extractAll ; artifacts.collect()→fetch ; recover()→query/click/scroll/screenshot"]
+  caller -.-> open

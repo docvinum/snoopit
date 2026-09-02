@@ -1,0 +1,32 @@
+%% Détail — « ce job est-il dû maintenant ? »
+%% Fichiers : src/scheduler/scheduler.ts, src/scheduler/window.ts
+%% Appelé depuis overview.mmd :: due → window
+%% Tout est pur : (schedule, jobId, instant) → verdict fixe. Aucune I/O, aucune horloge attendue.
+
+flowchart TD
+  dueJobs["scheduler.ts:53 dueJobs()<br/>filtre evaluateJobs sur verdict.due"]
+  evaluate["scheduler.ts:28 evaluateJobs()<br/>pour chaque job activé : lit runs.latestForJob()"]
+  isDue["window.ts:212 isDue()<br/>DueVerdict : due | manual | outside-window<br/>| before-planned-time | already-ran-this-period"]
+
+  period["window.ts:141 periodKey()<br/>hour / day / ISO-week — fenêtre passe-minuit ⇒ ancre la veille"]
+  resolveW["window.ts:102 resolveWindow()<br/>from/to en minutes, détecte le wrap"]
+  containsW["window.ts:119 windowContains()"]
+  minutes["window.ts:88 minutesOfDay() → :59 zonedParts()<br/>Intl.DateTimeFormat, DST géré par la plateforme"]
+  plannedDay["window.ts:187 plannedMinuteOfDay()<br/>daily/weekly : minute jittée dans la fenêtre"]
+  plannedHour["window.ts:177 plannedMinuteOfHour()<br/>hourly : minute jittée dans l'heure"]
+  unitHash["window.ts (privé) unitHash()<br/>sha256(jobId:periodKey) → [0,1) — jitter déterministe stable"]
+  pagesForRun["window.ts:261 pagesForRun()<br/>pagesPerRun.{min,max} → nombre jitté, stable dans la période"]
+
+  dueJobs --> evaluate --> isDue
+  isDue --> period --> minutes
+  isDue --> resolveW --> containsW
+  isDue -->|"already-ran-this-period ?"| period
+  isDue -->|"frequency hourly"| plannedHour
+  isDue -->|"frequency daily/weekly"| plannedDay
+  plannedDay --> unitHash
+  plannedHour --> unitHash
+  period --> unitHash
+  evaluate --> pagesForRun --> unitHash
+
+  note["Sortie vers runner : { job, verdict, pagesPerRun }.<br/>pagesPerRun devient le plafond dur d'entrées frontier du run."]
+  pagesForRun -.-> note

@@ -1,0 +1,46 @@
+%% Détail — un run d'un workflow, du verrou au rapport
+%% Fichier : src/runtime/workflow/runner.ts (runWorkflow, ligne 75)
+%% Appelé depuis overview.mmd :: connect → reclaim … settle → report
+%% Invariant : quoi qu'il arrive, le run est clos et rapporté exactement une fois.
+
+flowchart TD
+  entry["runner.ts:75 runWorkflow(definition, options)"]
+
+  subgraph LOCK["Verrou de chevauchement + reprise"]
+    findActive["runs.findActive(job, staleCutoff)<br/>run vivant ⇒ throw RunOverlapError (:49)"]
+    findStale["runs.findStale() → runs.markAbandoned()<br/>ferme les runs dont le process est mort"]
+    reclaim["frontier.reclaimAbandonedLeases(job)<br/>rend à la file le travail des runs tués"]
+  end
+
+  subgraph OPEN["Ouverture"]
+    start["runs.start({jobId, trigger, budget})"]
+    mkrun["mkdir(runDir) — downloads/paths.ts:103"]
+    emitter["new RunEventEmitter — events/emitter.ts:53<br/>emit ⇒ events repo + append events.jsonl"]
+    hb["setInterval(heartbeat).unref() → runs.heartbeat()"]
+    guard["new BudgetGuard(budget) — budget/guard.ts:56"]
+    ctx["new RunContext(...) — workflow/context.ts:59"]
+  end
+
+  invoke["result = await definition.run(ctx)<br/>— code du workflow, workflows/*.ts (voir context.mmd)"]
+
+  subgraph SETTLE["Dénouement — un seul chemin de sortie"]
+    catchB["catch BudgetExceededError (guard.ts:40)<br/>⇒ budgetLimit, event BUDGET_REACHED, PAS un échec"]
+    catchBlk["catch BlockedError (blocking.ts:140)<br/>⇒ event BLOCKED, run completed / stopReason blocked:*"]
+    catchErr["catch autre ⇒ failure, event RUN_FAILED"]
+    clear["clearInterval(heartbeat)"]
+    release["frontier.leasedBy(run) → frontier.release()<br/>rend les entrées réservées non terminées"]
+    finish["runs.finish({status, stopReason, reportPath})<br/>done | budget:* | blocked:* | error"]
+  end
+
+  subgraph REPORT["Rapport"]
+    problems["events.listByRun(run) filtré level != info"]
+    build["outputs/report.ts:64 buildReport()<br/>+ pages.countByStatus, frontier.countByState,<br/>artifacts.listByRun, events.countsByType"]
+    write["writeFile report.md + report.json"]
+    outcome["return RunOutcome { run, result, reportPath, error, budgetLimit, blocked, reclaimed }"]
+  end
+
+  entry --> findActive --> findStale --> reclaim --> start --> mkrun --> emitter --> hb --> guard --> ctx --> invoke
+  invoke --> catchB --> clear
+  invoke --> catchBlk --> clear
+  invoke --> catchErr --> clear
+  clear --> release --> finish --> problems --> build --> write --> outcome

@@ -1,0 +1,66 @@
+%% Détail — les primitives que le workflow appelle
+%% Fichier : src/runtime/workflow/context.ts (RunContext, ligne 59)
+%% Règle du module : chaque méthode qui change ce qu'on sait du monde
+%% écrit dans SQLite PUIS émet un event, dans cet ordre.
+
+flowchart TD
+
+  subgraph VISIT["ctx.visit(url, opts) — context.ts:93"]
+    v_budget["budget.assertOk('page') — le 11e visit ne démarre pas si maxPages=10"]
+    v_canon["canonical() → navigation/canonical.ts:119 canonicalizeUrl()<br/>URL canonique = identité de page"]
+    v_open["browser.open(url) → browser/cdp.ts:384 (voir cdp.mmd)"]
+    v_wait["page.waitForReady({selector: opts.waitFor})"]
+    v_err{"navigation.ok ?"}
+    v_gone["404/410 ⇒ pages.discover() + pages.markGone()"]
+    v_recerr["autre non-2xx ⇒ pages.recordError()<br/>runs.increment(errorCount) · budget.recordError()<br/>event HTTP_ERROR"]
+    v_ok["pages.recordVisit({contentHash(page.text), title, nextVisitAfter})<br/>runs.increment(pagesVisited) · budget.recordPage()<br/>event PAGE_VISITED (+ CONTENT_CHANGED si changed)"]
+    v_ret["retourne { page, navigation, record, changed, firstVisit }"]
+  end
+
+  subgraph FRONTIER["ctx.frontier.* — file de découverte"]
+    f_disc["discover(url) ⇒ frontier.enqueue() (idempotent, refuse un 'done')<br/>si ajouté : pages.discover() · runs.increment(pagesDiscovered) · event PAGE_DISCOVERED"]
+    f_take["take(limit) ⇒ min(limit, budget.remaining('max_pages'), pagesPerRun - claimed)<br/>puis frontier.lease({runId, leaseExpiresAt})"]
+    f_done["complete(entry) ⇒ frontier.complete()"]
+    f_fail["fail(entry, err) ⇒ frontier.fail() · runs.increment(errorCount) · budget.recordError()"]
+    f_rev["enqueueDueRevisits() ⇒ scheduler/revisit.ts:44<br/>pages.dueForRevisit() → frontier.requeue() | frontier.enqueue()"]
+  end
+
+  subgraph EXTRACT["ctx.extract(page, spec)"]
+    e_call["page.extractAll(spec) → browser/cdp.ts:224<br/>parseExtractSpec côté nous, page.evaluate côté navigateur"]
+  end
+
+  subgraph OVR["ctx.dismissOverlays / ctx.recover"]
+    o_dismiss["dismissOverlays(page) → recovery/heuristics.ts:233 (sans LLM)"]
+    o_recover["recover(page, opts) — context.ts:348<br/>event RECOVERY_STARTED → recovery/recover.ts:216 (voir recover.mmd)<br/>onLlmCall: budget.assertOk('llm') + recordLlmCall + runs.increment(llmCalls)"]
+  end
+
+  subgraph ART["ctx.artifacts.*"]
+    a_budget["collect: budget.assertOk('page') + assertOk('download')"]
+    a_dl["downloadTo(page, url) → downloads/download.ts:61<br/>page.fetch (session de la page) → vérifie 2xx → contentHash → écrit"]
+    a_dedup["artifacts.findByHash(job, hash) — mêmes octets, même chemin ⇒ deduplicated"]
+    a_row["artifacts.create({pageId, sourceUrl, kind, path, bytes, contentHash})<br/>runs.increment(artifactsCreated, downloadedBytes)<br/>budget.recordBytes + recordPage · event ARTIFACT_CREATED"]
+    a_write["writeJson / writeMarkdown / screenshot ⇒ writeArtifactBytes()<br/>artifactPath(downloads/paths.ts:88) → writeFile → artifacts.create"]
+  end
+
+  repos[("SQLite — state/repositories/*<br/>pages · frontier · runs · artifacts · events")]
+
+  v_budget --> v_canon --> v_open --> v_wait --> v_err
+  v_err -->|non| v_gone --> v_ret
+  v_err -->|non| v_recerr --> v_ret
+  v_err -->|oui| v_ok --> v_ret
+
+  f_take -.->|"plafonné par"| f_take
+  o_recover --> a_budget
+  a_budget --> a_dl --> a_dedup --> a_row
+  a_write --> a_row
+
+  v_gone --> repos
+  v_recerr --> repos
+  v_ok --> repos
+  f_disc --> repos
+  f_take --> repos
+  f_done --> repos
+  f_fail --> repos
+  f_rev --> repos
+  e_call --> repos
+  a_row --> repos
