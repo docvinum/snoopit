@@ -70,7 +70,11 @@ export function filenameFromUrl(canonicalUrl: string): string {
   } catch {
     pathname = canonicalUrl;
   }
-  const last = pathname.split('/').filter((s) => s !== '').pop() ?? '';
+  const last =
+    pathname
+      .split('/')
+      .filter((s) => s !== '')
+      .pop() ?? '';
   const sanitized = sanitizeSegment(decodeURIComponent(last));
   return sanitized === '' ? 'index' : sanitized;
 }

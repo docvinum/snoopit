@@ -77,9 +77,7 @@ describe('repository hygiene', () => {
     const gitignore = readFileSync(join(REPO_ROOT, '.gitignore'), 'utf8').split('\n');
 
     const risky = ['build/', 'lib/', 'lib64/', 'dist/', 'var/', 'parts/', 'target/', 'env/'];
-    const unanchored = gitignore
-      .map((line) => line.trim())
-      .filter((line) => risky.includes(line));
+    const unanchored = gitignore.map((line) => line.trim()).filter((line) => risky.includes(line));
 
     expect(
       unanchored,
