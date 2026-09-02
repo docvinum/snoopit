@@ -36,11 +36,24 @@ export interface FieldSpec {
   readonly attribute: string;
 }
 
-export interface ExtractSpec {
+/** Map of field name to field spec, e.g. `{ title: '.title', url: 'a@href' }`. */
+export type FieldMap = Readonly<Record<string, string>>;
+
+export interface ExtractSpec<F extends FieldMap = FieldMap> {
   /** Selector matching each item to extract. */
   readonly selector: string;
-  readonly fields: Readonly<Record<string, string>>;
+  readonly fields: F;
 }
+
+/**
+ * One extracted item: exactly the fields the spec asked for, each possibly missing.
+ *
+ * Keyed by the spec's own field names rather than by a string index, so a typo in a
+ * field name is a compile error and a present field needs no `undefined` check.
+ * Workflows are written by coding agents; this is where a whole class of their
+ * mistakes gets caught before a run.
+ */
+export type ExtractedRecord<F extends FieldMap> = { readonly [K in keyof F]: string | null };
 
 /**
  * Finds the `@` that separates selector from attribute.

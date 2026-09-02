@@ -1,14 +1,14 @@
 {
   "name": "snoopit",
   "version": "0.1.0",
-  "description": "Orchestrateur de visites web persistantes utilisant Chrome comme moteur d'exécution",
+  "description": "Orchestrateur de visites web persistantes utilisant Chrome comme moteur d'ex\u00e9cution",
   "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "bin": {
-    "snoopit": "./dist/cli/main.js"
+    "snoopit": "./dist/src/cli/main.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -16,7 +16,13 @@
 
 import type { Browser, BrowserContext, ElementHandle, Page, Response } from 'playwright-core';
 import { chromium } from 'playwright-core';
-import { normalizeText, parseExtractSpec, type ExtractSpec } from '../extraction/spec.js';
+import {
+  normalizeText,
+  parseExtractSpec,
+  type ExtractedRecord,
+  type ExtractSpec,
+  type FieldMap,
+} from '../extraction/spec.js';
 import { isHumanInteractable, type ElementView } from './interactable.js';
 import {
   DEFAULT_TIMEOUT_MS,
@@ -214,7 +220,7 @@ class CdpPage implements PageHandle {
     }
   }
 
-  async extractAll(spec: ExtractSpec): Promise<Record<string, string | null>[]> {
+  async extractAll<F extends FieldMap>(spec: ExtractSpec<F>): Promise<ExtractedRecord<F>[]> {
     // Parsed on our side so both backends agree on what a spec means; only the
     // resolved (selector, attribute) pairs cross into the page.
     const fields = Array.from(parseExtractSpec(spec), ([name, field]) => ({
@@ -261,7 +267,7 @@ class CdpPage implements PageHandle {
       for (const [name, value] of Object.entries(record)) {
         normalized[name] = value !== null && textFields.has(name) ? normalizeText(value) : value;
       }
-      return normalized;
+      return normalized as ExtractedRecord<F>;
     });
   }
 

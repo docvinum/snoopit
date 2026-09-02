@@ -37,6 +37,12 @@
       </li>
     </ul>
 
+    <!-- Deliberate hazards, and only these:
+           #broken-link  -> 404
+           #redirected   -> 302 to /page-2.html (fixture server only)
+           #external     -> off-site, must be filtered out by scope
+           #missing-image -> an <img> whose file does not exist
+         Every other link resolves, so an audit result is interpretable. -->
     <nav>
       <a id="next-page" href="/page-2.html">Page suivante</a>
       <a id="broken-link" href="/missing.html">Lien cassé</a>

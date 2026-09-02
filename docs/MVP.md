@@ -111,7 +111,7 @@ navigateur.
 
 ---
 
-### Lot 3 — Premier workflow de bout en bout
+### Lot 3 — Premier workflow de bout en bout ✅ *terminé*
 
 Site HTML de fixtures (index paginé, PDF, 404, redirection, bannière cookies, image
 manquante). `workflow()` et contexte d'exécution. Deux workflows : `example-audit` et
@@ -120,6 +120,14 @@ artifacts sur disque.
 
 *Terminé quand* : découverte → navigation → extraction → téléchargement → persistance
 → rapport s'exécute d'une traite et produit des artifacts corrects avec leur provenance.
+
+**Livré** : `workflow()` et `WorkflowContext` (`visit`, `frontier`, `artifacts`,
+`extract`), runner qui clôt et rapporte un run **même quand le workflow lève**,
+émetteur d'événements écrivant en base *et* en `events.jsonl` au fil de l'eau,
+rapports `report.md` + `report.json` issus d'une même fonction pure. Deux workflows
+d'exemple, `snoopit run` / `snoopit workflows`. Bail de frontier (le mécanisme ; la
+politique de reprise reste au Lot 4). 295 tests, dont 14 de bout en bout exécutés sur
+les deux backends.
 
 ---
 

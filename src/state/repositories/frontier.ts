@@ -57,9 +57,10 @@ export interface EnqueueInput {
 /**
  * The work queue: what is left to do for a job.
  *
- * Lot 1 implements enqueueing — the deduplication-critical half. Leasing, retry
- * and priority draining land in Lot 4, where they are tested against the
- * kill-and-resume acceptance case.
+ * Enqueueing is the deduplication-critical half; leasing is what lets a run claim
+ * work without two runs doing it twice. Reclaiming a *stale* lease left by a crashed
+ * run, and limiting how much is taken per run, are scheduling policy and belong to
+ * Lot 4 — this repository only provides the mechanism.
  */
 export class FrontierRepository {
   constructor(private readonly db: Db) {}
@@ -137,6 +138,90 @@ export class FrontierRepository {
         )
         .all(jobId, at, limit) as FrontierRow[]
     ).map(toEntry);
+  }
+
+  /**
+   * Claims up to `limit` queued entries for a run.
+   *
+   * Claiming and reading happen in one transaction: two runs racing for the same
+   * entry cannot both win, because the second one no longer sees it as `queued`.
+   * The lease carries an expiry so a crashed run's work becomes reclaimable — Lot 4
+   * decides when to reclaim it.
+   */
+  lease(input: {
+    readonly jobId: string;
+    readonly runId: string;
+    readonly limit: number;
+    readonly leaseExpiresAt: string;
+    readonly at?: string;
+  }): FrontierEntry[] {
+    const at = input.at ?? nowIso();
+
+    return this.db.transaction((): FrontierEntry[] => {
+      const candidates = this.db
+        .prepare(
+          `SELECT id FROM crawl_frontier
+            WHERE job_id = ?
+              AND state = 'queued'
+              AND (available_after IS NULL OR available_after <= ?)
+            ORDER BY priority ASC, depth ASC, id ASC
+            LIMIT ?`,
+        )
+        .all(input.jobId, at, input.limit) as { id: number }[];
+
+      if (candidates.length === 0) return [];
+
+      const claim = this.db.prepare(
+        `UPDATE crawl_frontier
+            SET state = 'leased', lease_run_id = ?, lease_expires_at = ?,
+                attempts = attempts + 1, updated_at = ?
+          WHERE id = ?`,
+      );
+      for (const candidate of candidates) {
+        claim.run(input.runId, input.leaseExpiresAt, at, candidate.id);
+      }
+
+      const placeholders = candidates.map(() => '?').join(',');
+      return (
+        this.db
+          .prepare(
+            `SELECT * FROM crawl_frontier WHERE id IN (${placeholders})
+              ORDER BY priority ASC, depth ASC, id ASC`,
+          )
+          .all(...candidates.map((c) => c.id)) as FrontierRow[]
+      ).map(toEntry);
+    })();
+  }
+
+  /** Marks a leased entry finished. Its lease is released. */
+  complete(jobId: string, canonicalUrl: string): void {
+    this.releaseWithState(jobId, canonicalUrl, 'done', null);
+  }
+
+  /** Marks a leased entry failed, keeping the error for the run report. */
+  fail(jobId: string, canonicalUrl: string, error: string): void {
+    this.releaseWithState(jobId, canonicalUrl, 'failed', error);
+  }
+
+  /** Returns an entry to the queue, e.g. when a run stops before working it. */
+  release(jobId: string, canonicalUrl: string): void {
+    this.releaseWithState(jobId, canonicalUrl, 'queued', null);
+  }
+
+  private releaseWithState(
+    jobId: string,
+    canonicalUrl: string,
+    state: FrontierState,
+    error: string | null,
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE crawl_frontier
+            SET state = ?, last_error = COALESCE(?, last_error),
+                lease_run_id = NULL, lease_expires_at = NULL, updated_at = ?
+          WHERE job_id = ? AND canonical_url = ?`,
+      )
+      .run(state, error, nowIso(), jobId, canonicalUrl);
   }
 
   setState(jobId: string, canonicalUrl: string, state: FrontierState, lastError?: string): void {

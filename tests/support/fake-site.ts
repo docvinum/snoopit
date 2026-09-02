@@ -48,6 +48,9 @@ export function buildFakeSite(origin = 'http://127.0.0.1:9999'): FakeSite {
   at('/index.html', html('index.html'));
   at('/page-2.html', html('page-2.html'));
   at('/publications/rapport-2026.html', html('publications/rapport-2026.html'));
+  at('/publications/etude-marche.html', html('publications/etude-marche.html'));
+  at('/publications/note-technique.html', html('publications/note-technique.html'));
+  at('/publications/bilan-2025.html', html('publications/bilan-2025.html'));
   at('/publications/rapport-2026.pdf', pdf('publications/rapport-2026.pdf'));
   at('/publications/etude-marche.pdf', pdf('publications/etude-marche.pdf'));
   at('/publications/bilan-2025.pdf', pdf('publications/bilan-2025.pdf'));

@@ -12,9 +12,9 @@
  */
 
 import type { ElementView } from './interactable.js';
-import type { ExtractSpec } from '../extraction/spec.js';
+import type { ExtractedRecord, ExtractSpec, FieldMap } from '../extraction/spec.js';
 
-export type { ExtractSpec };
+export type { ExtractedRecord, ExtractSpec, FieldMap };
 
 /** How long to wait before a navigation or a wait is considered failed. */
 export const DEFAULT_TIMEOUT_MS = 30_000;
@@ -111,8 +111,8 @@ export interface PageHandle {
   query(selector: string): Promise<ElementSnapshot | null>;
   queryAll(selector: string): Promise<ElementSnapshot[]>;
 
-  /** Structured extraction. Returns one record per matched item. */
-  extractAll(spec: ExtractSpec): Promise<Record<string, string | null>[]>;
+  /** Structured extraction. Returns one record per matched item, typed by the spec. */
+  extractAll<F extends FieldMap>(spec: ExtractSpec<F>): Promise<ExtractedRecord<F>[]>;
 
   /** Clicks an element, refusing non-interactable ones unless forced. */
   click(selector: string, options?: ClickOptions): Promise<void>;

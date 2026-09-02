@@ -421,6 +421,93 @@ describe('FrontierRepository', () => {
     expect(entry.meta).toEqual({ title: 'Rapport 2026', pages: 12 });
   });
 
+  it('leases entries to a run, in priority order', () => {
+    const jobId = seedJob();
+    const run = store.runs.start({ jobId, trigger: 'manual' });
+    store.frontier.enqueue({ jobId, url: 'u/1', canonicalUrl: 'u/1', priority: 100 });
+    store.frontier.enqueue({ jobId, url: 'u/2', canonicalUrl: 'u/2', priority: 10 });
+
+    const leased = store.frontier.lease({
+      jobId,
+      runId: run.id,
+      limit: 5,
+      leaseExpiresAt: isoFromNow(60_000),
+    });
+
+    expect(leased.map((e) => e.canonicalUrl)).toEqual(['u/2', 'u/1']);
+    expect(leased.every((e) => e.state === 'leased' && e.leaseRunId === run.id)).toBe(true);
+    expect(leased.every((e) => e.attempts === 1)).toBe(true);
+  });
+
+  it('never leases the same entry to two runs', () => {
+    const jobId = seedJob();
+    const first = store.runs.start({ jobId, trigger: 'manual' });
+    const second = store.runs.start({ jobId, trigger: 'manual' });
+    store.frontier.enqueue({ jobId, url: 'u/1', canonicalUrl: 'u/1' });
+
+    const a = store.frontier.lease({
+      jobId,
+      runId: first.id,
+      limit: 10,
+      leaseExpiresAt: isoFromNow(60_000),
+    });
+    const b = store.frontier.lease({
+      jobId,
+      runId: second.id,
+      limit: 10,
+      leaseExpiresAt: isoFromNow(60_000),
+    });
+
+    expect(a).toHaveLength(1);
+    expect(b).toHaveLength(0);
+  });
+
+  it('honours the lease limit, leaving the rest queued', () => {
+    const jobId = seedJob();
+    const run = store.runs.start({ jobId, trigger: 'manual' });
+    for (let i = 0; i < 5; i += 1) {
+      store.frontier.enqueue({ jobId, url: `u/${String(i)}`, canonicalUrl: `u/${String(i)}` });
+    }
+    expect(
+      store.frontier.lease({ jobId, runId: run.id, limit: 2, leaseExpiresAt: isoFromNow(60_000) }),
+    ).toHaveLength(2);
+    expect(store.frontier.countByState(jobId)).toEqual({ leased: 2, queued: 3 });
+  });
+
+  it('completing and failing release the lease', () => {
+    const jobId = seedJob();
+    const run = store.runs.start({ jobId, trigger: 'manual' });
+    store.frontier.enqueue({ jobId, url: 'u/ok', canonicalUrl: 'u/ok' });
+    store.frontier.enqueue({ jobId, url: 'u/bad', canonicalUrl: 'u/bad' });
+    store.frontier.lease({ jobId, runId: run.id, limit: 10, leaseExpiresAt: isoFromNow(60_000) });
+
+    store.frontier.complete(jobId, 'u/ok');
+    store.frontier.fail(jobId, 'u/bad', 'timeout');
+
+    const ok = store.frontier.get(jobId, 'u/ok')!;
+    const bad = store.frontier.get(jobId, 'u/bad')!;
+    expect(ok.state).toBe('done');
+    expect(ok.leaseRunId).toBeNull();
+    expect(bad.state).toBe('failed');
+    expect(bad.lastError).toBe('timeout');
+    expect(bad.leaseExpiresAt).toBeNull();
+  });
+
+  it('releases an entry back to the queue for a later run', () => {
+    const jobId = seedJob();
+    const run = store.runs.start({ jobId, trigger: 'manual' });
+    store.frontier.enqueue({ jobId, url: 'u/1', canonicalUrl: 'u/1' });
+    store.frontier.lease({ jobId, runId: run.id, limit: 1, leaseExpiresAt: isoFromNow(60_000) });
+
+    store.frontier.release(jobId, 'u/1');
+
+    const entry = store.frontier.get(jobId, 'u/1')!;
+    expect(entry.state).toBe('queued');
+    expect(entry.leaseRunId).toBeNull();
+    // The attempt is remembered, so a repeatedly-released entry is visible as such.
+    expect(entry.attempts).toBe(1);
+  });
+
   it('counts only unfinished work as remaining', () => {
     const jobId = seedJob();
     store.frontier.enqueue({ jobId, url: 'u/1', canonicalUrl: 'u/1' });

@@ -1,8 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "src",
+    // Workflows are compiled with the runtime: they are versioned repo code, reviewed
+    // and type-checked like the rest, not scripts loaded from an untyped directory.
+    "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "workflows/**/*.ts"]
 }

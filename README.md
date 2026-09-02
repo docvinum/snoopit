@@ -40,14 +40,14 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 
 ## État du projet
 
-**Lot 2 terminé — runtime navigateur minimal.** Le premier workflow de bout en bout arrive au Lot 3.
+**Lot 3 terminé — premier workflow de bout en bout.** Le scheduler et la reprise arrivent au Lot 4.
 
 | Lot | Contenu | Statut |
 |---|---|---|
 | 0 | Audit de `browser-agent`, décision, architecture cible, MVP | ✅ terminé |
 | 1 | Squelette, tooling, SQLite, modèles, tests initiaux | ✅ terminé |
 | 2 | Runtime navigateur minimal | ✅ terminé |
-| 3 | Premier workflow de bout en bout | à venir |
+| 3 | Premier workflow de bout en bout | ✅ terminé |
 | 4 | Scheduler, reprise, budgets | à venir |
 | 5 | Recovery (heuristiques, puis LLM) | à venir |
 | 6 | Déploiement et documentation agent | à venir |
@@ -63,6 +63,13 @@ npm run build
 cp snoopit.config.example.yaml snoopit.config.yaml   # optionnel : les défauts marchent
 node dist/cli/main.js migrate    # crée data/snoopit.db
 node dist/cli/main.js status     # configuration, version de schéma, jobs
+```
+
+Lancer un workflow (exige un Chrome persistant joignable en CDP) :
+
+```bash
+node dist/src/cli/main.js workflows          # workflows disponibles
+node dist/src/cli/main.js run example-audit  # un run, un rapport
 ```
 
 Vérification complète (format, lint, typecheck, tests) :
@@ -84,6 +91,47 @@ images manquantes, redirections inattendues, changements de structure.
 **`collect`** — visiter un site pour récupérer des contenus : texte, Markdown, JSON,
 PDF, images. Chaque ressource conserve sa provenance : URL, dates de découverte,
 de dernière visite et de collecte, hash de contenu, statut, fichiers produits.
+
+---
+
+## À quoi ressemble un workflow
+
+```ts
+export default workflow({
+  name: 'example-publications',
+  budget: { maxPages: 50, maxLlmCalls: 0 },
+
+  async run(ctx) {
+    // Découverte
+    const { page } = await ctx.visit(startUrl, { waitFor: '.publication-list' });
+
+    const publications = await ctx.extract(page, {
+      selector: '.publication',
+      fields: { title: '.title', date: '.date', pdf: '.download@href' },
+    });
+
+    for (const publication of publications) {
+      if (publication.pdf === null) continue;
+      ctx.frontier.discover(publication.pdf, { kind: 'document' });
+    }
+    await page.close();
+
+    // Collecte — consomme la frontier, reprenable indépendamment
+    const collector = await ctx.browser.open(startUrl);
+    for (const entry of ctx.frontier.take(50)) {
+      await ctx.artifacts.collect(collector, entry.url, { dir: 'publications' });
+      ctx.frontier.complete(entry);
+    }
+    await collector.close();
+  },
+});
+```
+
+Le workflow déclare son intention. Le runtime détient la mémoire, la provenance, les
+événements et le rapport — un workflow ne peut pas oublier de les tenir à jour. Les
+noms de champs sont typés : `publication.pdf` existe, `publication.pdfs` ne compile pas.
+
+Exemples complets : [`workflows/`](workflows/).
 
 ---
 
@@ -116,6 +164,7 @@ utilisation minimale du LLM.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture cible, décisions structurantes, modèle d'état |
 | [`docs/MVP.md`](docs/MVP.md) | Périmètre du MVP, test d'acceptation, séquence des lots |
 | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) | Outillage, règles TypeScript, frontières d'architecture, tests |
+| [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Écrire un workflow : primitives, conventions, exemples |
 
 ---
 

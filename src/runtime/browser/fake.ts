@@ -16,7 +16,13 @@
 
 import { parseHTML } from 'linkedom';
 import { canonicalizeUrl } from '../navigation/canonical.js';
-import { normalizeText, parseExtractSpec, type ExtractSpec } from '../extraction/spec.js';
+import {
+  normalizeText,
+  parseExtractSpec,
+  type ExtractedRecord,
+  type ExtractSpec,
+  type FieldMap,
+} from '../extraction/spec.js';
 import { HTML_PSEUDO_ATTRIBUTE, TEXT_PSEUDO_ATTRIBUTE } from '../extraction/spec.js';
 import { isHumanInteractable, type ElementView } from './interactable.js';
 import {
@@ -294,7 +300,7 @@ class FakePage implements PageHandle {
     );
   }
 
-  extractAll(spec: ExtractSpec): Promise<Record<string, string | null>[]> {
+  extractAll<F extends FieldMap>(spec: ExtractSpec<F>): Promise<ExtractedRecord<F>[]> {
     this.assertOpen();
     const fields = parseExtractSpec(spec);
     const items = Array.from(this.document.querySelectorAll(spec.selector));
@@ -305,7 +311,7 @@ class FakePage implements PageHandle {
         for (const [name, field] of fields) {
           record[name] = readField(item, field, this.currentUrl);
         }
-        return record;
+        return record as ExtractedRecord<F>;
       }),
     );
   }

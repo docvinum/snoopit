@@ -69,5 +69,5 @@ jobs:
           done
           echo "Chrome did not expose its CDP endpoint in time"; exit 1
 
-      - name: Backend conformance against real Chrome
-        run: npx vitest run tests/integration/backend-conformance.test.ts tests/integration/cdp-only.test.ts
+      - name: Conformance and end-to-end runs against real Chrome
+        run: npx vitest run tests/integration/backend-conformance.test.ts tests/integration/cdp-only.test.ts tests/e2e
