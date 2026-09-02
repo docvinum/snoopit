@@ -10,6 +10,8 @@ import { loadConfig } from '../config/load.js';
 import { CdpBackend } from '../runtime/browser/cdp.js';
 import { listWorkflows, loadWorkflow } from '../runtime/workflow/load.js';
 import { runWorkflow } from '../runtime/workflow/runner.js';
+import { dueJobs, evaluateJobs } from '../scheduler/scheduler.js';
+import { parseDuration } from '../util/time.js';
 import { canonicalizeUrl } from '../runtime/navigation/canonical.js';
 import { appliedMigrations } from '../state/db.js';
 import { Store } from '../state/store.js';
@@ -22,12 +24,15 @@ Usage:
   snoopit status                 Show configuration, schema version and job summary
   snoopit run <workflow>         Run a workflow once, against the persistent Chrome
   snoopit workflows              List available workflows
+  snoopit due                    Show which jobs are due now, and why not otherwise
+  snoopit tick                   Run every due job once (what the scheduler service calls)
   snoopit canon <url...>         Canonicalise URLs (the identity function used for dedup)
   snoopit help                   Show this message
 
 Options:
   --config <file>                Path to a config file (default: ./snoopit.config.yaml)
   --job <id>                     Job to attribute the run to (default: the workflow name)
+  --tz <zone>                    Time zone for schedule windows (default: UTC)
 `;
 
 interface ParsedArgs {
@@ -35,12 +40,14 @@ interface ParsedArgs {
   readonly rest: readonly string[];
   readonly configFile: string | undefined;
   readonly jobName: string | undefined;
+  readonly timeZone: string | undefined;
 }
 
 function parseArgs(argv: readonly string[]): ParsedArgs {
   const rest: string[] = [];
   let configFile: string | undefined;
   let jobName: string | undefined;
+  let timeZone: string | undefined;
   let command = 'help';
   let seenCommand = false;
 
@@ -56,6 +63,11 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       if (value === undefined) throw new Error('--job requires a name');
       jobName = value;
       i += 1;
+    } else if (arg === '--tz') {
+      const value = argv[i + 1];
+      if (value === undefined) throw new Error('--tz requires a zone');
+      timeZone = value;
+      i += 1;
     } else if (!seenCommand) {
       command = arg;
       seenCommand = true;
@@ -63,7 +75,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       rest.push(arg);
     }
   }
-  return { command, rest, configFile, jobName };
+  return { command, rest, configFile, jobName, timeZone };
 }
 
 function cmdMigrate(configFile: string | undefined): number {
@@ -152,6 +164,8 @@ async function cmdRun(
         browser,
         dataDir: loaded.paths.dataDir,
         trigger: 'manual',
+        heartbeatMs: parseDuration(loaded.config.runs.heartbeatInterval),
+        staleAfterMs: parseDuration(loaded.config.runs.staleAfter),
       });
 
       console.log('');
@@ -162,6 +176,73 @@ async function cmdRun(
     } finally {
       await browser.close();
     }
+  } finally {
+    store.close();
+  }
+}
+
+function cmdDue(configFile: string | undefined, timeZone: string | undefined): number {
+  const loaded = loadConfig(configFile === undefined ? {} : { file: configFile });
+  const store = Store.open({ path: loaded.paths.databaseFile });
+
+  try {
+    const decisions = evaluateJobs(store, timeZone === undefined ? {} : { timeZone });
+    if (decisions.length === 0) {
+      console.log('No enabled jobs.');
+      return 0;
+    }
+    for (const { job, verdict, pagesPerRun } of decisions) {
+      const detail = verdict.due
+        ? `DUE (period ${verdict.periodKey}${pagesPerRun === null ? '' : `, ${String(pagesPerRun)} pages`})`
+        : `waiting — ${verdict.reason}`;
+      console.log(`${job.id.padEnd(28)} ${detail}`);
+    }
+    return 0;
+  } finally {
+    store.close();
+  }
+}
+
+async function cmdTick(
+  configFile: string | undefined,
+  timeZone: string | undefined,
+): Promise<number> {
+  const loaded = loadConfig(configFile === undefined ? {} : { file: configFile });
+  const store = Store.open({ path: loaded.paths.databaseFile });
+
+  try {
+    const due = dueJobs(store, timeZone === undefined ? {} : { timeZone });
+    if (due.length === 0) {
+      console.log('Nothing due.');
+      return 0;
+    }
+
+    let failures = 0;
+    for (const { job, pagesPerRun } of due) {
+      const definition = await loadWorkflow(job.workflow);
+      const browser = await CdpBackend.connect({ cdpUrl: loaded.config.browser.cdpUrl });
+      try {
+        const outcome = await runWorkflow(definition, {
+          store,
+          job,
+          browser,
+          dataDir: loaded.paths.dataDir,
+          trigger: 'schedule',
+          pagesPerRun,
+          heartbeatMs: parseDuration(loaded.config.runs.heartbeatInterval),
+          staleAfterMs: parseDuration(loaded.config.runs.staleAfter),
+        });
+        console.log(`${job.id}: ${outcome.run.status} (${outcome.run.stopReason ?? '—'})`);
+        if (outcome.error !== null) failures += 1;
+      } catch (error) {
+        // One job failing must not stop the tick: the others are still due.
+        console.error(`${job.id}: ${error instanceof Error ? error.message : String(error)}`);
+        failures += 1;
+      } finally {
+        await browser.close();
+      }
+    }
+    return failures === 0 ? 0 : 1;
   } finally {
     store.close();
   }
@@ -214,6 +295,10 @@ export async function main(argv: readonly string[]): Promise<number> {
         return await cmdRun(parsed.rest[0], parsed.configFile, parsed.jobName);
       case 'workflows':
         return cmdWorkflows();
+      case 'due':
+        return cmdDue(parsed.configFile, parsed.timeZone);
+      case 'tick':
+        return await cmdTick(parsed.configFile, parsed.timeZone);
       case 'canon':
         return cmdCanon(parsed.rest);
       case 'help':

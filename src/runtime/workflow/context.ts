@@ -14,9 +14,12 @@ import { canonicalizeUrl } from '../navigation/canonical.js';
 import { downloadTo } from '../downloads/download.js';
 import { artifactPath } from '../downloads/paths.js';
 import type { RunEventEmitter } from '../events/emitter.js';
+import type { BudgetGuard } from '../budget/guard.js';
 import type { Store } from '../../state/store.js';
 import type { Artifact, FrontierEntry, Job, Run } from '../../state/types.js';
 import { contentHash } from '../../util/hash.js';
+import { isoFromNow, parseDuration } from '../../util/time.js';
+import { enqueueDueRevisits } from '../../scheduler/revisit.js';
 import type {
   CollectOptions,
   CollectResult,
@@ -36,6 +39,9 @@ export interface ContextOptions {
   readonly dataDir: string;
   /** Lease duration for frontier entries claimed by this run. */
   readonly leaseMs?: number;
+  readonly budget: BudgetGuard;
+  /** Hard cap on frontier entries this run may claim, from `pagesPerRun`. */
+  readonly pagesPerRun?: number | null;
 }
 
 const DEFAULT_LEASE_MS = 15 * 60_000;
@@ -50,10 +56,14 @@ export class RunContext implements WorkflowContext {
   readonly run: Run;
   readonly browser: BrowserBackend;
   readonly events: RunEventEmitter;
+  readonly budget: BudgetGuard;
 
   private readonly store: Store;
   private readonly dataDir: string;
   private readonly leaseMs: number;
+  private readonly pagesPerRun: number | null;
+  /** Frontier entries claimed so far, so `pagesPerRun` bounds the whole run. */
+  private claimed = 0;
 
   constructor(options: ContextOptions) {
     this.store = options.store;
@@ -63,6 +73,8 @@ export class RunContext implements WorkflowContext {
     this.events = options.events;
     this.dataDir = options.dataDir;
     this.leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
+    this.budget = options.budget;
+    this.pagesPerRun = options.pagesPerRun ?? null;
   }
 
   private canonical(url: string, base?: string): string {
@@ -72,6 +84,10 @@ export class RunContext implements WorkflowContext {
   }
 
   async visit(url: string, options: VisitOptions = {}): Promise<VisitResult> {
+    // Asked before acting: `maxPages: 10` means the eleventh visit never starts.
+    // The runner turns this into a clean stop, not a failure.
+    this.budget.assertOk('page');
+
     const canonicalUrl = this.canonical(url);
     const page = await this.browser.open(url, {
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
@@ -123,6 +139,7 @@ export class RunContext implements WorkflowContext {
       // Either way it counts against the run's error budget: both are things an
       // audit reports and `maxErrors` is meant to bound.
       this.store.runs.increment(this.run.id, 'errorCount');
+      this.budget.recordError();
       this.events.emit({
         type: 'HTTP_ERROR',
         level: 'error',
@@ -143,9 +160,12 @@ export class RunContext implements WorkflowContext {
       contentHash: hashOfPageText(await page.text()),
       httpStatus: navigation.status,
       title,
+      nextVisitAfter:
+        options.revisitAfter === undefined ? null : isoFromNow(parseDuration(options.revisitAfter)),
     });
 
     this.store.runs.increment(this.run.id, 'pagesVisited');
+    this.budget.recordPage();
     this.events.emit({
       type: 'PAGE_VISITED',
       url: navigation.url,
@@ -196,13 +216,24 @@ export class RunContext implements WorkflowContext {
     discoverAll: (urls: readonly string[], options: DiscoverOptions = {}): number =>
       urls.reduce((added, url) => added + (this.frontier.discover(url, options) ? 1 : 0), 0),
 
-    take: (limit: number): FrontierEntry[] =>
-      this.store.frontier.lease({
+    take: (limit: number): FrontierEntry[] => {
+      // Never claim work this run is not allowed to finish: a leased entry that is
+      // abandoned costs a lease expiry before anyone can pick it up again.
+      const caps = [limit, this.budget.remaining('max_pages')];
+      if (this.pagesPerRun !== null) caps.push(this.pagesPerRun - this.claimed);
+
+      const effective = Math.min(...caps.filter((cap): cap is number => cap !== null));
+      if (effective <= 0) return [];
+
+      const entries = this.store.frontier.lease({
         jobId: this.job.id,
         runId: this.run.id,
-        limit,
+        limit: effective,
         leaseExpiresAt: new Date(Date.now() + this.leaseMs).toISOString(),
-      }),
+      });
+      this.claimed += entries.length;
+      return entries;
+    },
 
     complete: (entry: FrontierEntry): void => {
       this.store.frontier.complete(this.job.id, entry.canonicalUrl);
@@ -211,9 +242,17 @@ export class RunContext implements WorkflowContext {
     fail: (entry: FrontierEntry, error: string): void => {
       this.store.frontier.fail(this.job.id, entry.canonicalUrl, error);
       this.store.runs.increment(this.run.id, 'errorCount');
+      this.budget.recordError();
     },
 
     remaining: (): number => this.store.frontier.remaining(this.job.id),
+
+    enqueueDueRevisits: (options: { limit?: number; includeGone?: boolean } = {}): number =>
+      enqueueDueRevisits(this.store, {
+        jobId: this.job.id,
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.includeGone === undefined ? {} : { includeGone: options.includeGone }),
+      }),
   };
 
   readonly artifacts = {
@@ -222,6 +261,10 @@ export class RunContext implements WorkflowContext {
       url: string,
       options: CollectOptions = {},
     ): Promise<CollectResult> => {
+      // Both limits apply: a collected document costs a unit of crawl work and a
+      // number of bytes.
+      this.budget.assertOk('page');
+      this.budget.assertOk('download');
       const canonicalUrl = this.canonical(url, page.url());
       const download = await downloadTo(page, url, {
         jobId: this.job.id,
@@ -258,6 +301,10 @@ export class RunContext implements WorkflowContext {
 
       this.store.runs.increment(this.run.id, 'artifactsCreated');
       this.store.runs.increment(this.run.id, 'downloadedBytes', download.bytes);
+      // Bytes are counted after the fact: the size is only known once the body has
+      // arrived, so this limit guards disk and the next iteration, not this transfer.
+      this.budget.recordBytes(download.bytes);
+      this.budget.recordPage();
       this.events.emit({
         type: 'ARTIFACT_CREATED',
         url: download.url,

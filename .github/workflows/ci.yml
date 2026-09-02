@@ -51,6 +51,10 @@ jobs:
 
       - run: npm ci
 
+      # The kill-and-resume acceptance test spawns the real CLI, so dist must exist.
+      - name: Build
+        run: npm run build
+
       - name: Start a persistent Chrome with CDP on loopback
         run: |
           google-chrome \

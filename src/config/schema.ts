@@ -82,6 +82,27 @@ export const configSchema = z
       .strict()
       .default({}),
 
+    runs: z
+      .object({
+        /** How often a live run refreshes its heartbeat. */
+        heartbeatInterval: z
+          .string()
+          .regex(durationPattern, 'expected a duration like "15s"')
+          .default('15s'),
+        /**
+         * How long a run may go without a heartbeat before it counts as dead and its
+         * work is reclaimed. Must comfortably exceed `heartbeatInterval`, or a slow
+         * run declares itself abandoned. Lower it to resume sooner after a crash;
+         * raise it if runs are long and the machine is loaded.
+         */
+        staleAfter: z
+          .string()
+          .regex(durationPattern, 'expected a duration like "75s"')
+          .default('75s'),
+      })
+      .strict()
+      .default({}),
+
     defaultBudget: budgetSchema.default({
       maxPages: 100,
       maxDuration: '20m',

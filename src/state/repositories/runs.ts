@@ -138,6 +138,47 @@ export class RunRepository {
   }
 
   /**
+   * A run of this job that is still alive, or `null`.
+   *
+   * "Alive" means `running` with a heartbeat newer than `cutoff`. This is the
+   * overlap lock: a job must not start a second run while one is genuinely working,
+   * but a *dead* run must never block the job forever — which is exactly the
+   * difference a heartbeat can express and a lock file cannot.
+   */
+  findActive(jobId: string, cutoffIso: string): Run | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM runs
+          WHERE job_id = ?
+            AND status = 'running'
+            AND heartbeat_at IS NOT NULL
+            AND heartbeat_at > ?
+          ORDER BY started_at DESC
+          LIMIT 1`,
+      )
+      .get(jobId, cutoffIso) as RunRow | undefined;
+    return row === undefined ? null : toRun(row);
+  }
+
+  /**
+   * Closes a run that was left `running` by a killed process.
+   *
+   * Recorded as `aborted` with an explicit reason rather than deleted: the run
+   * happened, it did work, and its artifacts and events are still on disk. Erasing
+   * it would make the record lie about what the system did.
+   */
+  markAbandoned(id: string, reason = 'process died'): Run | null {
+    this.db
+      .prepare(
+        `UPDATE runs
+            SET status = 'aborted', finished_at = ?, stop_reason = 'abandoned', error = ?
+          WHERE id = ? AND status = 'running'`,
+      )
+      .run(nowIso(), reason, id);
+    return this.get(id);
+  }
+
+  /**
    * Runs still marked `running` whose heartbeat predates `cutoff`.
    *
    * This is the crash-recovery query: a process killed mid-run leaves its row

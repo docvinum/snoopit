@@ -131,7 +131,7 @@ les deux backends.
 
 ---
 
-### Lot 4 — Scheduler, reprise et budgets
+### Lot 4 — Scheduler, reprise et budgets ✅ *terminé — jalon MVP*
 
 Fenêtres temporelles avec jitter (distribution de charge, jamais de l'évasion),
 `pages_per_run` min/max, priorisation de la frontier, verrous anti-recouvrement,
@@ -139,6 +139,17 @@ application des budgets avec arrêt propre, événement `BUDGET_REACHED`, revisi
 `next_visit_after`.
 
 *Terminé quand* : **le test d'acceptation du §1 passe.** C'est le jalon du MVP.
+
+**Livré** : le test d'acceptation passe, exécuté pour de vrai — un processus enfant
+lance le CLI réel contre un Chrome réel, est tué par `SIGKILL` au 6ᵉ document, et le
+run suivant termine le catalogue sans rien retélécharger ni sauter
+(`tests/e2e/kill-resume.test.ts`).
+
+Aussi : garde-budget par opération avec arrêt propre (`completed` + `stopReason`,
+jamais `failed`) et `BUDGET_REACHED` ; fenêtres temporelles avec jitter déterministe,
+interprétées dans le fuseau du job ; `pagesPerRun` ; verrou anti-recouvrement fondé
+sur le heartbeat ; reprise des baux détenus par un run mort ; revisite par
+`next_visit_after` ; commandes `due` et `tick`. 357 tests.
 
 ---
 

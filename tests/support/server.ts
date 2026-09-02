@@ -27,10 +27,99 @@ export interface FixtureServer {
   close(): Promise<void>;
 }
 
-export async function startFixtureServer(): Promise<FixtureServer> {
+export interface FixtureServerOptions {
+  /**
+   * Delay before each synthetic catalogue document is served.
+   *
+   * Exists so a test can kill a running crawl at a chosen point: with an instant
+   * server there is no moment at which to interrupt one.
+   */
+  readonly documentDelayMs?: number;
+  /** How many documents the synthetic catalogue lists. */
+  readonly catalogueSize?: number;
+}
+
+/** A minimal, valid PDF carrying a title. Real bytes, so the pipeline is exercised. */
+function makePdf(title: string): Buffer {
+  const content = Buffer.from(`BT /F1 24 Tf 72 700 Td (${title}) Tj ET`);
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${String(content.byteLength)} >>\nstream\n${content.toString()}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+
+  let body = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(body.length);
+    body += `${String(index + 1)} 0 obj\n${object}\nendobj\n`;
+  });
+
+  const xref = body.length;
+  body += `xref\n0 ${String(objects.length + 1)}\n0000000000 65535 f \n`;
+  for (const offset of offsets) body += `${offset.toString().padStart(10, '0')} 00000 n \n`;
+  body += `trailer\n<< /Size ${String(objects.length + 1)} /Root 1 0 R >>\nstartxref\n${String(xref)}\n%%EOF\n`;
+  return Buffer.from(body, 'latin1');
+}
+
+/** The synthetic catalogue page: a paginated-style list of downloadable documents. */
+function catalogueHtml(size: number): string {
+  const items = Array.from({ length: size }, (_, index) => {
+    const id = String(index + 1).padStart(2, '0');
+    return `      <li class="document">
+        <span class="title">Document ${id}</span>
+        <span class="date">2026-01-${id}</span>
+        <a class="download" href="/catalogue/doc-${id}.pdf">PDF</a>
+      </li>`;
+  }).join('\n');
+
+  return `<!doctype html>
+<html lang="fr">
+  <head><meta charset="utf-8" /><title>Catalogue</title></head>
+  <body>
+    <h1>Catalogue</h1>
+    <ul class="document-list">
+${items}
+    </ul>
+  </body>
+</html>
+`;
+}
+
+export async function startFixtureServer(
+  options: FixtureServerOptions = {},
+): Promise<FixtureServer> {
+  const documentDelayMs = options.documentDelayMs ?? 0;
+  const catalogueSize = options.catalogueSize ?? 12;
+
   const server: Server = createServer((req, res) => {
     const requestUrl = new URL(req.url ?? '/', 'http://127.0.0.1');
     const pathname = decodeURIComponent(requestUrl.pathname);
+
+    if (pathname === '/catalogue.html') {
+      const body = catalogueHtml(catalogueSize);
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-length': String(Buffer.byteLength(body)),
+      });
+      res.end(body);
+      return;
+    }
+
+    const document = /^\/catalogue\/(doc-\d+)\.pdf$/.exec(pathname);
+    if (document !== null) {
+      const body = makePdf(document[1]!);
+      setTimeout(() => {
+        res.writeHead(200, {
+          'content-type': 'application/pdf',
+          'content-length': String(body.byteLength),
+        });
+        res.end(body);
+      }, documentDelayMs);
+      return;
+    }
 
     // A permanent redirect, for `unexpected_redirect` checks.
     if (pathname === '/old-address.html') {

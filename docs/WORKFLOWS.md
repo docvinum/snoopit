@@ -132,7 +132,67 @@ await ctx.artifacts.screenshot(page, 'accueil.png');
 
 ---
 
-## 4. Règles
+## 4. Budgets, planification et reprise
+
+Un workflow déclare son budget ; le runtime l'applique.
+
+```ts
+budget: { maxPages: 50, maxDuration: '20m', maxDownloadBytes: 500_000_000, maxLlmCalls: 0 }
+```
+
+`maxPages` compte les **unités de travail** : une visite de page et un document
+collecté valent chacun 1. Compter seulement les visites HTML laisserait un workflow
+de collecte pratiquement sans borne.
+
+Atteindre un budget **n'est pas un échec** : le run se termine `completed` avec un
+`stopReason` du type `budget:max_pages`, et les limites en vigueur figurent dans le
+rapport — sans quoi un run tronqué ressemble à un site qui aurait perdu des pages.
+
+`ctx.frontier.take(n)` est déjà borné par le budget restant et par `pagesPerRun` :
+inutile de compter vous-même, le runtime refuse de réserver du travail qu'il ne
+pourra pas finir.
+
+### Reprise
+
+Rien de particulier à écrire. Un run tué laisse ses entrées réservées ; le run suivant
+constate que le run propriétaire est mort (heartbeat périmé), le clôt en `aborted` et
+remet son travail en file. La déduplication de la frontier fait le reste : ce qui est
+`done` n'est jamais refait.
+
+La seule règle : **redécouvrez librement**. `ctx.frontier.discover()` sur une URL déjà
+traitée ne la remet pas en file, donc reparcourir l'index à chaque run est correct et
+attendu.
+
+### Revisite
+
+```ts
+await ctx.visit(url, { revisitAfter: '7d' });      // marque la prochaine échéance
+const requeued = ctx.frontier.enqueueDueRevisits(); // au DÉBUT du run
+```
+
+Appelez `enqueueDueRevisits()` **avant** de visiter quoi que ce soit : une visite
+rafraîchit `next_visit_after`, donc vérifier après ne trouverait jamais rien.
+
+### Planification
+
+Déclarée sur le job, pas dans le workflow :
+
+```yaml
+schedule:
+  frequency: daily          # manual | hourly | daily | weekly
+  window: { from: "08:00", to: "10:00" }
+  pagesPerRun: { min: 10, max: 100 }
+```
+
+Le moment exact dans la fenêtre est jitté de façon déterministe à partir de l'id du
+job et de la période : stable (un job ne dérive pas), et différent d'un job à l'autre.
+C'est un mécanisme de **répartition de charge**, pas de dissimulation.
+
+`snoopit due` explique pour chaque job s'il est dû, et sinon pourquoi.
+
+---
+
+## 5. Règles
 
 1. **Découverte et collecte sont deux phases.** Alimentez la frontier, puis
    consommez-la. C'est ce qui rend possibles la reprise, la priorisation et la
@@ -153,7 +213,7 @@ await ctx.artifacts.screenshot(page, 'accueil.png');
 
 ---
 
-## 5. Tester un workflow
+## 6. Tester un workflow
 
 Sans navigateur, avec `FakeBackend` :
 
@@ -172,7 +232,7 @@ le démarrage de Chrome. Voir `tests/e2e/workflow-run.test.ts`.
 
 ---
 
-## 6. Lancer
+## 7. Lancer
 
 ```bash
 npm run build

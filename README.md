@@ -40,7 +40,7 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 
 ## État du projet
 
-**Lot 3 terminé — premier workflow de bout en bout.** Le scheduler et la reprise arrivent au Lot 4.
+**Lot 4 terminé — jalon MVP atteint.** Le recovery arrive au Lot 5.
 
 | Lot | Contenu | Statut |
 |---|---|---|
@@ -48,7 +48,7 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 | 1 | Squelette, tooling, SQLite, modèles, tests initiaux | ✅ terminé |
 | 2 | Runtime navigateur minimal | ✅ terminé |
 | 3 | Premier workflow de bout en bout | ✅ terminé |
-| 4 | Scheduler, reprise, budgets | à venir |
+| 4 | Scheduler, reprise, budgets | ✅ terminé — **jalon MVP** |
 | 5 | Recovery (heuristiques, puis LLM) | à venir |
 | 6 | Déploiement et documentation agent | à venir |
 
@@ -70,6 +70,8 @@ Lancer un workflow (exige un Chrome persistant joignable en CDP) :
 ```bash
 node dist/src/cli/main.js workflows          # workflows disponibles
 node dist/src/cli/main.js run example-audit  # un run, un rapport
+node dist/src/cli/main.js due                # quels jobs sont dus, et sinon pourquoi
+node dist/src/cli/main.js tick               # lance chaque job dû une fois
 ```
 
 Vérification complète (format, lint, typecheck, tests) :

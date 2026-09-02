@@ -15,12 +15,18 @@ import type { ExtractedRecord, ExtractSpec, FieldMap } from '../extraction/spec.
 import type { Artifact, FrontierEntry, Job, Page, Run, RunBudget } from '../../state/types.js';
 import type { NavigationResult } from '../browser/types.js';
 import type { RunEventEmitter } from '../events/emitter.js';
+import type { BudgetGuard } from '../budget/guard.js';
 
 export interface VisitOptions {
   readonly waitFor?: string;
   readonly timeoutMs?: number;
   /** Record the visit in `crawl_pages`. Default: true. */
   readonly record?: boolean;
+  /**
+   * When this page becomes worth looking at again, as a duration (`7d`, `12h`).
+   * Stored as `next_visit_after`; `frontier.enqueueDueRevisits()` turns it into work.
+   */
+  readonly revisitAfter?: string;
 }
 
 export interface VisitResult {
@@ -62,6 +68,8 @@ export interface WorkflowContext {
   readonly run: Run;
   readonly browser: BrowserBackend;
   readonly events: RunEventEmitter;
+  /** The run's budget. Enforced automatically; readable for a workflow's own pacing. */
+  readonly budget: BudgetGuard;
 
   /**
    * Opens a URL, records the visit and emits the matching events.
@@ -82,6 +90,11 @@ export interface WorkflowContext {
     complete(entry: FrontierEntry): void;
     fail(entry: FrontierEntry, error: string): void;
     remaining(): number;
+    /**
+     * Re-queues known pages whose `revisitAfter` has come due.
+     * Idempotent, so calling it at the start of a run is safe.
+     */
+    enqueueDueRevisits(options?: { limit?: number; includeGone?: boolean }): number;
   };
 
   readonly artifacts: {

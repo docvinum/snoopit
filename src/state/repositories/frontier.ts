@@ -234,6 +234,48 @@ export class FrontierRepository {
       .run(state, orNull(lastError), nowIso(), jobId, canonicalUrl);
   }
 
+  /**
+   * Returns abandoned leases to the queue.
+   *
+   * A lease is abandoned when the run holding it is no longer `running` — that is
+   * the real signal, and it is immediate. The expiry timestamp is only a backstop
+   * for the case where a run row somehow never gets closed.
+   *
+   * Waiting for the timer instead would strand a killed run's work for the whole
+   * lease duration, which is exactly the stall this exists to prevent. A *live*
+   * run's lease is never touched, which is what keeps this safe to call at the
+   * start of every run.
+   *
+   * @returns how many entries were reclaimed.
+   */
+  reclaimAbandonedLeases(jobId: string, at: string = nowIso()): number {
+    const result = this.db
+      .prepare(
+        `UPDATE crawl_frontier
+            SET state = 'queued', lease_run_id = NULL, lease_expires_at = NULL, updated_at = ?
+          WHERE job_id = ?
+            AND state = 'leased'
+            AND (
+              lease_run_id IS NULL
+              OR lease_run_id NOT IN (SELECT id FROM runs WHERE status = 'running')
+              OR (lease_expires_at IS NOT NULL AND lease_expires_at <= ?)
+            )`,
+      )
+      .run(at, jobId, at);
+    return result.changes;
+  }
+
+  /** Entries currently leased by a run, whatever their expiry. */
+  leasedBy(runId: string): FrontierEntry[] {
+    return (
+      this.db
+        .prepare(
+          "SELECT * FROM crawl_frontier WHERE lease_run_id = ? AND state = 'leased' ORDER BY id",
+        )
+        .all(runId) as FrontierRow[]
+    ).map(toEntry);
+  }
+
   countByState(jobId: string): Record<string, number> {
     const rows = this.db
       .prepare('SELECT state, COUNT(*) AS n FROM crawl_frontier WHERE job_id = ? GROUP BY state')
