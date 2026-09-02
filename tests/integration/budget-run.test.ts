@@ -17,6 +17,8 @@ import { workflow } from '../../src/runtime/workflow/types.js';
 import { Store } from '../../src/state/store.js';
 import type { Job, RunBudget } from '../../src/state/types.js';
 import { canonicalizeUrlOrThrow } from '../../src/runtime/navigation/canonical.js';
+import { enqueueDueRevisits } from '../../src/scheduler/revisit.js';
+import { isoFromNow } from '../../src/util/time.js';
 import { buildFakeSite } from '../support/fake-site.js';
 import { startFixtureServer, type FixtureServer } from '../support/server.js';
 
@@ -199,6 +201,51 @@ describe('budget enforcement', () => {
 });
 
 describe('revisits', () => {
+  it('re-queues a page the frontier already finished', () => {
+    // The regression that matters. `enqueue` deliberately refuses to resurrect a
+    // `done` entry — that refusal is what stops a crawl looping over a page linked
+    // from everywhere. A revisit is the opposite intention, and routing it through
+    // `enqueue` silently did nothing for every page that had ever been collected,
+    // which is to say for every page a monitoring workflow cares about.
+    const jobId = job.id;
+    const url = 'https://example.com/watched';
+
+    store.pages.recordVisit({
+      jobId,
+      url,
+      canonicalUrl: url,
+      nextVisitAfter: '2020-01-01T00:00:00.000Z',
+    });
+    store.frontier.enqueue({ jobId, url, canonicalUrl: url });
+    store.frontier.setState(jobId, url, 'done');
+
+    expect(enqueueDueRevisits(store, { jobId })).toBe(1);
+    expect(store.frontier.get(jobId, url)!.state).toBe('queued');
+  });
+
+  it('leaves a leased entry alone: a live run is holding it', () => {
+    const jobId = job.id;
+    const url = 'https://example.com/leased';
+    const run = store.runs.start({ jobId, trigger: 'manual' });
+
+    store.pages.recordVisit({
+      jobId,
+      url,
+      canonicalUrl: url,
+      nextVisitAfter: '2020-01-01T00:00:00.000Z',
+    });
+    store.frontier.enqueue({ jobId, url, canonicalUrl: url });
+    store.frontier.lease({
+      jobId,
+      runId: run.id,
+      limit: 1,
+      leaseExpiresAt: isoFromNow(60_000),
+    });
+
+    expect(enqueueDueRevisits(store, { jobId })).toBe(0);
+    expect(store.frontier.get(jobId, url)!.state).toBe('leased');
+  });
+
   it('re-queues a page whose revisit time has come, and not before', async () => {
     const url = server.url('/index.html');
 

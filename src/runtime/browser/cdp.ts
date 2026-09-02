@@ -367,6 +367,17 @@ export class CdpBackend implements BrowserBackend {
     if (viewport !== undefined) {
       await page.setViewportSize({ width: viewport[0], height: viewport[1] });
     }
+
+    if (options.useHttpCache !== true) {
+      // Change detection is only meaningful against what the site serves now. With
+      // the cache on, a revisit can be answered from Chrome's own copy and the page
+      // looks unchanged when it is not.
+      const session = await this.context.newCDPSession(page);
+      // `Network.enable` first: without the domain enabled the setting is accepted
+      // and silently ignored, which looks like it worked and is not.
+      await session.send('Network.enable');
+      await session.send('Network.setCacheDisabled', { cacheDisabled: true });
+    }
     return new CdpPage(page, this.context, options.timeoutMs ?? this.defaultTimeoutMs);
   }
 

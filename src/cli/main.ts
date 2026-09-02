@@ -12,6 +12,7 @@ import { listWorkflows, loadWorkflow } from '../runtime/workflow/load.js';
 import { runWorkflow } from '../runtime/workflow/runner.js';
 import { dueJobs, evaluateJobs } from '../scheduler/scheduler.js';
 import { providerFromConfig } from '../runtime/recovery/llm/from-config.js';
+import { exitCodeFor, formatChecks, runDoctor } from './doctor.js';
 import { parseDuration } from '../util/time.js';
 import { canonicalizeUrl } from '../runtime/navigation/canonical.js';
 import { appliedMigrations } from '../state/db.js';
@@ -25,6 +26,7 @@ Usage:
   snoopit status                 Show configuration, schema version and job summary
   snoopit run <workflow>         Run a workflow once, against the persistent Chrome
   snoopit workflows              List available workflows
+  snoopit doctor                 Check that this deployment is sound
   snoopit due                    Show which jobs are due now, and why not otherwise
   snoopit tick                   Run every due job once (what the scheduler service calls)
   snoopit canon <url...>         Canonicalise URLs (the identity function used for dedup)
@@ -253,6 +255,16 @@ async function cmdTick(
   }
 }
 
+async function cmdDoctor(configFile: string | undefined): Promise<number> {
+  const loaded = loadConfig(configFile === undefined ? {} : { file: configFile });
+  console.log(`config:   ${loaded.sourcePath ?? '(defaults)'}`);
+  console.log('');
+
+  const checks = await runDoctor(loaded);
+  console.log(formatChecks(checks));
+  return exitCodeFor(checks);
+}
+
 function cmdWorkflows(): number {
   const names = listWorkflows();
   if (names.length === 0) {
@@ -300,6 +312,8 @@ export async function main(argv: readonly string[]): Promise<number> {
         return await cmdRun(parsed.rest[0], parsed.configFile, parsed.jobName);
       case 'workflows':
         return cmdWorkflows();
+      case 'doctor':
+        return await cmdDoctor(parsed.configFile);
       case 'due':
         return cmdDue(parsed.configFile, parsed.timeZone);
       case 'tick':

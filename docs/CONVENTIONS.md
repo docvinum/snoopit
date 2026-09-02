@@ -108,7 +108,22 @@ Un commit par lot cohérent : `type: sujet` (`feat:`, `fix:`, `docs:`, `test:`,
 
 ---
 
-## 7. Signaux d'alerte
+## 7. Pièges connus
+
+- **`.gitignore` vient d'un template Python.** Ses patrons de répertoires sont ancrés
+  (`/build/`, `/lib/`) : non ancré, `downloads/` a avalé `src/runtime/downloads/`
+  pendant cinq lots — tests verts en local, CI rouge, rien ne désignait la cause.
+  `tests/unit/repo-hygiene.test.ts` échoue si cela recommence.
+- **Le cache HTTP de Chrome est désactivé par défaut** sur les pages ouvertes par le
+  runtime. Un crawler qui relit une page pour décider si elle a *changé* ne doit pas
+  se faire servir sa propre copie. `Network.setCacheDisabled` exige
+  `Network.enable` au préalable, sans quoi le réglage est accepté et ignoré.
+- **`enqueue` ne ressuscite pas une entrée `done`** — c'est ce qui empêche un crawl
+  de boucler. Une revisite passe par `requeue`, qui exprime l'intention inverse.
+
+---
+
+## 8. Signaux d'alerte
 
 Repris de `docs/MVP.md` §5, à vérifier à chaque revue :
 

@@ -208,6 +208,35 @@ export class FrontierRepository {
     this.releaseWithState(jobId, canonicalUrl, 'queued', null);
   }
 
+  /**
+   * Brings a finished entry back into the queue.
+   *
+   * Distinct from `enqueue`, which deliberately refuses to resurrect a `done` entry —
+   * that refusal is what stops a crawl looping over a page linked from everywhere.
+   * A revisit is the opposite intention: the work *should* happen again because time
+   * has passed. Conflating the two silently disables revisits altogether.
+   *
+   * A `leased` entry is never touched: a live run is holding it.
+   *
+   * @returns true when an entry was actually requeued.
+   */
+  requeue(jobId: string, canonicalUrl: string, priority?: number): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE crawl_frontier
+            SET state = 'queued',
+                priority = COALESCE(?, priority),
+                lease_run_id = NULL,
+                lease_expires_at = NULL,
+                available_after = NULL,
+                updated_at = ?
+          WHERE job_id = ? AND canonical_url = ?
+            AND state IN ('done', 'failed', 'skipped')`,
+      )
+      .run(priority ?? null, nowIso(), jobId, canonicalUrl);
+    return result.changes > 0;
+  }
+
   private releaseWithState(
     jobId: string,
     canonicalUrl: string,

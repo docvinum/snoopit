@@ -1,0 +1,52 @@
+# The persistent Chrome that snoopit drives.
+#
+# This is the decision that made the extension unnecessary (docs/BROWSER_AGENT_AUDIT.md §7):
+# a browser we own, kept alive with a dedicated profile, so cookies and sessions
+# survive restarts. snoopit attaches to it over CDP; it never launches a throwaway one.
+#
+# The debug port is bound to loopback and must stay there. It grants full control of
+# a browser carrying authenticated sessions — the audited project exposed exactly
+# this on every interface with no authentication.
+
+[Unit]
+Description=snoopit — persistent Chrome (CDP on loopback)
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=snoopit
+Group=snoopit
+
+Environment=HOME=/var/lib/snoopit
+WorkingDirectory=/var/lib/snoopit
+
+ExecStart=/usr/bin/google-chrome-stable \
+  --headless=new \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/var/lib/snoopit/chrome-profile \
+  --disable-gpu \
+  --disable-dev-shm-usage \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-background-networking \
+  --window-size=1920,1080 \
+  about:blank
+
+Restart=always
+RestartSec=5
+
+# The profile is mutable state we own; everything else is read-only to this unit.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/snoopit
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

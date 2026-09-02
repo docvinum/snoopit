@@ -24,6 +24,13 @@ const MEDIA_TYPES: Record<string, string> = {
 export interface FixtureServer {
   readonly origin: string;
   url(path: string): string;
+  /**
+   * Changes what `/mutable.html` serves.
+   *
+   * Lets a test verify that a *second* visit sees new content — which is the whole
+   * point of a monitoring crawl, and something a browser cache can silently break.
+   */
+  setMutableContent(body: string): void;
   close(): Promise<void>;
 }
 
@@ -93,10 +100,24 @@ export async function startFixtureServer(
 ): Promise<FixtureServer> {
   const documentDelayMs = options.documentDelayMs ?? 0;
   const catalogueSize = options.catalogueSize ?? 12;
+  let mutableContent = 'version un';
 
   const server: Server = createServer((req, res) => {
     const requestUrl = new URL(req.url ?? '/', 'http://127.0.0.1');
     const pathname = decodeURIComponent(requestUrl.pathname);
+
+    if (pathname === '/mutable.html') {
+      const body = `<!doctype html><html><body><h1>Mutable</h1><p class="content">${mutableContent}</p></body></html>`;
+      // Explicitly cacheable, exactly as an ordinary site would be. A crawler that
+      // only works against no-cache servers does not work.
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'last-modified': new Date(Date.now() - 3_600_000).toUTCString(),
+        'content-length': String(Buffer.byteLength(body)),
+      });
+      res.end(body);
+      return;
+    }
 
     if (pathname === '/catalogue.html') {
       const body = catalogueHtml(catalogueSize);
@@ -187,6 +208,9 @@ export async function startFixtureServer(
   return {
     origin,
     url: (path: string) => new URL(path, origin).href,
+    setMutableContent: (body: string) => {
+      mutableContent = body;
+    },
     close: () =>
       new Promise<void>((resolvePromise, rejectPromise) => {
         server.closeAllConnections();

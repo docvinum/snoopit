@@ -71,6 +71,25 @@ describe('CdpBackend — real browser behaviour', () => {
     await page.close();
   });
 
+  it('sees new content on a revisit, rather than its own cached copy', async () => {
+    if (backend === null) return;
+    // The defect this guards against is the worst kind for a monitoring tool: the
+    // crawl succeeds, the hash matches, and the report says nothing changed —
+    // because Chrome answered from its own cache. The page below is served with an
+    // old Last-Modified and no no-cache header, exactly like an ordinary site.
+    server.setMutableContent('version un');
+
+    const first = await backend.open(server.url('/mutable.html'));
+    expect((await first.query('.content'))?.text).toBe('version un');
+    await first.close();
+
+    server.setMutableContent('version deux');
+
+    const second = await backend.open(server.url('/mutable.html'));
+    expect((await second.query('.content'))?.text).toBe('version deux');
+    await second.close();
+  });
+
   it('collects a document behind the page session using the same cookies', async () => {
     if (backend === null) return;
     const page = await backend.open(server.url('/index.html'));

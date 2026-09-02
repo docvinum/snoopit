@@ -40,7 +40,7 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 
 ## État du projet
 
-**Lot 5 terminé — recovery en place.** Reste le déploiement et la compétence agent (Lot 6).
+**MVP complet — les six lots sont terminés.** Le système est déployable et documenté pour les agents de code.
 
 | Lot | Contenu | Statut |
 |---|---|---|
@@ -50,7 +50,7 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 | 3 | Premier workflow de bout en bout | ✅ terminé |
 | 4 | Scheduler, reprise, budgets | ✅ terminé — **jalon MVP** |
 | 5 | Recovery (heuristiques, puis LLM) | ✅ terminé |
-| 6 | Déploiement et documentation agent | à venir |
+| 6 | Déploiement et documentation agent | ✅ terminé |
 
 ---
 
@@ -72,7 +72,10 @@ node dist/src/cli/main.js workflows          # workflows disponibles
 node dist/src/cli/main.js run example-audit  # un run, un rapport
 node dist/src/cli/main.js due                # quels jobs sont dus, et sinon pourquoi
 node dist/src/cli/main.js tick               # lance chaque job dû une fois
+node dist/src/cli/main.js doctor             # ce déploiement est-il sain ?
 ```
+
+Déploiement sur un serveur : [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 Vérification complète (format, lint, typecheck, tests) :
 
@@ -169,6 +172,9 @@ utilisation minimale du LLM.
 | [`docs/MVP.md`](docs/MVP.md) | Périmètre du MVP, test d'acceptation, séquence des lots |
 | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) | Outillage, règles TypeScript, frontières d'architecture, tests |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Écrire un workflow : primitives, conventions, exemples |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Installation sur l'OptiPlex, systemd, sauvegarde du profil |
+| [`AGENTS.md`](AGENTS.md) | Instructions pour Claude Code / Codex |
+| [`skills/snoopit/SKILL.md`](skills/snoopit/SKILL.md) | Compétence : écrire un workflow |
 
 ---
 

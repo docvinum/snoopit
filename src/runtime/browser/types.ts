@@ -28,6 +28,16 @@ export interface OpenOptions {
   readonly timeoutMs?: number;
   /** Viewport in CSS pixels, from the browser profile. */
   readonly viewport?: readonly [number, number];
+  /**
+   * Let the browser serve pages from its own HTTP cache. Off by default.
+   *
+   * A crawler that re-reads a page to decide whether it *changed* must not be handed
+   * its own previous copy: the content hash would match, the change would go
+   * unreported, and a monitoring job would silently claim nothing had moved. The
+   * cost is re-fetching bytes; the alternative is being wrong about the one question
+   * the system exists to answer.
+   */
+  readonly useHttpCache?: boolean;
 }
 
 export interface NavigationResult {

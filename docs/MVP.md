@@ -173,13 +173,25 @@ blocage → arrêt propre `blocked:<raison>` sans jamais consulter le modèle. 4
 
 ---
 
-### Lot 6 — Déploiement et documentation agent
+### Lot 6 — Déploiement et documentation agent ✅ *terminé*
 
 Unités systemd, script d'installation, sauvegarde/restauration du profil Chrome.
 `AGENTS.md`, `skills/snoopit/SKILL.md`, guide de rédaction de workflow.
 
 *Terminé quand* : un coding agent produit un workflow fonctionnel **à partir de la
 seule documentation, sans modifier le runtime** — l'objectif énoncé au §18 de la spec.
+
+**Livré** : unités systemd vérifiées par `systemd-analyze`, `install.sh` idempotent,
+sauvegarde/restauration du profil Chrome (cycle testé pour de vrai, purge comprise),
+`snoopit doctor`, `AGENTS.md`, `skills/snoopit/SKILL.md`, `docs/DEPLOYMENT.md`.
+
+Le critère a été exercé : `workflows/example-veille.ts` a été écrit en ne consultant
+que `SKILL.md`, sans lire `src/`. Il a compilé du premier coup — et l'exercice a
+révélé **deux vrais défauts du runtime** que les cinq lots précédents n'avaient pas
+attrapés (revisite inopérante, cache HTTP masquant les changements), tous deux
+corrigés avec test de non-régression. `tests/integration/docs-surface.test.ts` lie
+désormais la documentation au code : une primitive renommée fait échouer les tests.
+445 tests.
 
 ---
 

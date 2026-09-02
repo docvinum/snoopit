@@ -1,0 +1,166 @@
+# Déploiement — `snoopit` sur l'OptiPlex
+
+> Cible : Ubuntu, Chrome ou Chromium, systemd. Docker n'est pas nécessaire et
+> n'entre pas dans le MVP (spec §20).
+
+---
+
+## 1. La forme du déploiement
+
+```text
+systemd
+  snoopit-chrome.service    Chrome permanent, profil dédié, CDP sur 127.0.0.1:9222
+  snoopit-tick.timer        réveille le scheduler toutes les 10 minutes
+  snoopit-tick.service      un passage : lance les jobs dus, puis sort
+
+/opt/snoopit                l'application (dist/, node_modules/)
+/etc/snoopit                configuration et secrets
+/var/lib/snoopit
+  chrome-profile/           sessions authentifiées — la seule chose irremplaçable
+  data/                     base SQLite, artifacts, rapports
+```
+
+**Chrome tourne en permanence ; le scheduler non.** Le scheduler ne conserve aucun
+état entre deux passages — ce qui est dû se déduit de la base et de l'horloge — donc
+un processus qui démarre, travaille et sort n'a rien à perdre quand on le tue, et
+rien à fuir quand il tourne des mois.
+
+Le timer toutes les 10 minutes **n'est pas la fréquence de crawl** : un job quotidien
+avec une fenêtre 08:00–10:00 ne tourne qu'une fois, à son propre instant jitté dans
+cette fenêtre. Des réveils fréquents ne font qu'affiner la résolution.
+
+---
+
+## 2. Installation
+
+```bash
+git clone https://github.com/docvinum/snoopit.git
+cd snoopit
+sudo ./deploy/install.sh
+```
+
+Le script est **idempotent** : le relancer met à jour l'application sans jamais
+toucher au profil Chrome ni à la base — les deux choses qui doivent survivre à un
+déploiement. La configuration existante n'est jamais écrasée non plus : une mise à
+jour ne doit pas changer silencieusement le comportement du crawler.
+
+Vérification :
+
+```bash
+sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js doctor \
+  --config /etc/snoopit/snoopit.config.yaml
+```
+
+---
+
+## 3. Sécurité
+
+**Le port de debug reste sur la boucle locale.** Il donne le contrôle complet d'un
+navigateur porteur de sessions authentifiées — sans authentification d'aucune sorte.
+C'est la leçon directe de l'audit : le projet amont exposait exactement cela sur
+toutes les interfaces (`docs/BROWSER_AGENT_AUDIT.md` §4.8). `snoopit doctor` échoue
+si la configuration pointe ailleurs que sur `127.0.0.1`.
+
+**Les secrets ne sont pas dans la configuration.** `/etc/snoopit/snoopit.config.yaml`
+nomme une variable d'environnement ; la valeur vit dans `/etc/snoopit/snoopit.env`,
+en `0640`, lu par systemd via `EnvironmentFile`. Le fichier de configuration peut
+donc être versionné et lu sans précaution.
+
+Les unités tournent sous un utilisateur système dédié, avec `ProtectSystem=strict` et
+`ReadWritePaths=/var/lib/snoopit` : le seul endroit inscriptible est l'état.
+
+---
+
+## 4. Sauvegarde du profil Chrome
+
+Le profil porte les sessions authentifiées. C'est la seule chose que la base ne peut
+pas reconstruire.
+
+```bash
+sudo ./deploy/backup-profile.sh              # vers /var/lib/snoopit/backups
+sudo ./deploy/restore-profile.sh <archive>
+```
+
+**Chrome est arrêté pendant la copie.** Un instantané pris pendant que Chrome écrit
+dans ses bases LevelDB peut se restaurer en profil corrompu — ce qui est pire que pas
+de sauvegarde du tout : l'échec survient plus tard, silencieusement, et personne ne
+le relie à la sauvegarde.
+
+Les caches sont exclus (volumineux, changeants, reconstruits à la demande). Les sept
+dernières sauvegardes sont conservées : une politique que personne ne purge remplit
+le disque et emporte le crawler avec.
+
+À la restauration, le profil courant est **déplacé, pas supprimé** — si l'archive
+n'est pas la bonne, les sessions restent récupérables.
+
+Automatisation possible via un timer systemd, ou :
+
+```cron
+0 3 * * * /opt/snoopit/deploy/backup-profile.sh >> /var/log/snoopit-backup.log 2>&1
+```
+
+---
+
+## 5. Exploitation
+
+```bash
+systemctl status snoopit-chrome.service
+systemctl list-timers snoopit-tick.timer
+journalctl -u snoopit-tick.service -n 100
+
+sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js due     # qui est dû, et sinon pourquoi
+sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js status  # jobs, pages, frontier
+```
+
+Chaque run laisse une trace complète :
+
+```text
+/var/lib/snoopit/data/jobs/<job>/runs/<run-id>/
+  report.md      report.json      events.jsonl
+```
+
+`events.jsonl` est écrit **au fil de l'eau** : même un run tué laisse une trace
+lisible de sa progression.
+
+---
+
+## 6. Diagnostic
+
+| Symptôme | Vérifier |
+|---|---|
+| Rien ne se passe | `due` — le job est peut-être hors de sa fenêtre, ou déjà passé cette période |
+| « no CDP endpoint » | `systemctl status snoopit-chrome.service` |
+| Un job semble bloqué | `doctor` — un run laissé `running` par un processus tué ; le run suivant le récupère |
+| Run `blocked:captcha` | Le site refuse l'accès. C'est un constat, pas une panne : **on ne contourne pas** |
+| Run `budget:max_pages` | Normal. Le run a fait ce qui lui était permis ; le suivant continue |
+
+Un run `blocked:*` ou `budget:*` se termine `completed`, jamais `failed` : dans les
+deux cas le système a fait exactement ce qu'on lui demandait.
+
+---
+
+## 7. Chrome sans affichage
+
+`--headless=new` suffit pour la collecte et les screenshots. Si un site exige un
+rendu complet (rare), remplacer par Xvfb :
+
+```ini
+ExecStart=/usr/bin/xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+  /usr/bin/google-chrome-stable --remote-debugging-address=127.0.0.1 …
+```
+
+`--disable-dev-shm-usage` est présent parce que `/dev/shm` est souvent trop petit sur
+un serveur ; sans lui, Chrome meurt sur les pages lourdes.
+
+---
+
+## 8. Mise à jour
+
+```bash
+cd /chemin/vers/snoopit && git pull
+sudo ./deploy/install.sh
+```
+
+Les migrations sont appliquées par le script. Elles sont **immuables une fois
+appliquées** : si une migration déjà passée a changé, le démarrage échoue plutôt que
+de dériver en silence.
