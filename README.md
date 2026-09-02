@@ -7,6 +7,10 @@ Chrome réel, sur un serveur Linux. Il se souvient de ce qu'il a déjà visité,
 un crawl interrompu là où il s'était arrêté, et produit des rapports et des fichiers
 collectés avec leur provenance.
 
+C'est un **navigateur automatisable et mémorisable pour agents** : un agent explore
+une tâche via l'API, transforme cette exploration en workflow déterministe, puis
+laisse `snoopit` le rejouer et le maintenir dans le temps.
+
 Ce n'est pas un agent LLM qui décide de chaque clic. La navigation est **déterministe
 et scriptable** ; un LLM n'intervient qu'en **mécanisme de récupération**, lorsqu'un
 état inattendu apparaît.
