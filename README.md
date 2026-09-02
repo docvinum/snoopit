@@ -174,6 +174,7 @@ utilisation minimale du LLM.
 | [`docs/BROWSER_AGENT_AUDIT.md`](docs/BROWSER_AGENT_AUDIT.md) | Audit de `zxcHolmes/browser-agent` et décision `fork` / `extraction` / `rewrite` |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture cible, décisions structurantes, modèle d'état |
 | [`docs/MVP.md`](docs/MVP.md) | Périmètre du MVP, test d'acceptation, séquence des lots |
+| [`docs/BILAN.md`](docs/BILAN.md) | Bilan lot par lot : décisions, enseignements, limites, reste à faire |
 | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) | Outillage, règles TypeScript, frontières d'architecture, tests |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Écrire un workflow : primitives, conventions, exemples |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Installation sur l'OptiPlex, systemd, sauvegarde du profil |
