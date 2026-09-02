@@ -17,6 +17,8 @@ import { buildReport } from '../../outputs/report.js';
 import type { Store } from '../../state/store.js';
 import type { Job, Run, RunBudget, RunEvent, RunTrigger } from '../../state/types.js';
 import { BudgetExceededError, BudgetGuard } from '../budget/guard.js';
+import { BlockedError } from '../recovery/blocking.js';
+import type { LlmProvider } from '../recovery/llm/provider.js';
 import { isoFromNow } from '../../util/time.js';
 import { RunContext } from './context.js';
 import type { WorkflowDefinition } from './types.js';
@@ -38,6 +40,8 @@ export interface RunWorkflowOptions {
   readonly staleAfterMs?: number;
   /** Cap on frontier entries this run may claim, from the job's `pagesPerRun`. */
   readonly pagesPerRun?: number | null;
+  /** Absent means recovery stops at L1 — a valid, fully supported configuration. */
+  readonly llm?: LlmProvider | null;
   readonly onLine?: (line: string) => void;
 }
 
@@ -58,6 +62,8 @@ export interface RunOutcome {
   readonly error: Error | null;
   /** The budget limit that stopped the run, if any. Not a failure. */
   readonly budgetLimit: string | null;
+  /** Set when the site refused us. The run stopped on purpose. */
+  readonly blocked: BlockedError | null;
   /** Frontier entries returned to the queue from previously crashed runs. */
   readonly reclaimed: number;
 }
@@ -138,11 +144,13 @@ export async function runWorkflow<T>(
     dataDir,
     budget: guard,
     pagesPerRun: options.pagesPerRun ?? null,
+    llm: options.llm ?? null,
   });
 
   let result: unknown = null;
   let failure: Error | null = null;
   let budgetLimit: string | null = null;
+  let blocked: BlockedError | null = null;
 
   try {
     result = await definition.run(context);
@@ -156,6 +164,17 @@ export async function runWorkflow<T>(
         level: 'warn',
         message: error.message,
         data: { limit: error.limit, used: error.used, max: error.max },
+      });
+    } else if (error instanceof BlockedError) {
+      // The site told us to stop. That is an outcome to report, not a failure to
+      // retry and never something to work around (spec §12).
+      blocked = error;
+      events.emit({
+        type: 'BLOCKED',
+        level: 'error',
+        url: error.url,
+        message: error.message,
+        data: { reason: error.signal.reason, evidence: error.signal.evidence },
       });
     } else {
       failure = error instanceof Error ? error : new Error(String(error));
@@ -174,7 +193,12 @@ export async function runWorkflow<T>(
   if (failure === null) {
     events.emit({
       type: 'RUN_COMPLETED',
-      message: budgetLimit === null ? 'Run terminé' : `Run terminé (budget ${budgetLimit})`,
+      message:
+        blocked !== null
+          ? `Run arrêté : le site refuse l'accès (${blocked.signal.reason})`
+          : budgetLimit === null
+            ? 'Run terminé'
+            : `Run terminé (budget ${budgetLimit})`,
     });
   } else {
     events.emit({
@@ -189,7 +213,13 @@ export async function runWorkflow<T>(
     store.runs.finish(run.id, {
       status: failure === null ? 'completed' : 'failed',
       stopReason:
-        failure !== null ? 'error' : budgetLimit === null ? 'done' : `budget:${budgetLimit}`,
+        failure !== null
+          ? 'error'
+          : blocked !== null
+            ? `blocked:${blocked.signal.reason}`
+            : budgetLimit === null
+              ? 'done'
+              : `budget:${budgetLimit}`,
       error: failure === null ? null : failure.message,
       reportPath: posix.join(runDirectory, 'report.md'),
     }) ?? run;
@@ -221,6 +251,7 @@ export async function runWorkflow<T>(
     reportJsonPath: posix.join(runDirectory, 'report.json'),
     error: failure,
     budgetLimit,
+    blocked,
     reclaimed,
   };
 }

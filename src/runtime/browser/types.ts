@@ -21,6 +21,8 @@ export const DEFAULT_TIMEOUT_MS = 30_000;
 
 export type LoadState = 'domcontentloaded' | 'load' | 'networkidle';
 
+export type ScrollDirection = 'up' | 'down' | 'top' | 'bottom';
+
 export interface OpenOptions {
   readonly waitUntil?: LoadState;
   readonly timeoutMs?: number;
@@ -116,6 +118,15 @@ export interface PageHandle {
 
   /** Clicks an element, refusing non-interactable ones unless forced. */
   click(selector: string, options?: ClickOptions): Promise<void>;
+
+  /**
+   * Scrolls the page.
+   *
+   * Needed because content below the fold is one of the two everyday reasons a
+   * selector is missing (the other being an overlay), and because `scroll` is an
+   * action a workflow may allow recovery to take.
+   */
+  scroll(direction: ScrollDirection): Promise<void>;
 
   /** Full HTML of the document. */
   content(): Promise<string>;

@@ -39,6 +39,7 @@ import {
   type PageHandle,
   type ReadyOptions,
   type ScreenshotOptions,
+  type ScrollDirection,
 } from './types.js';
 
 export interface CdpBackendOptions {
@@ -287,6 +288,15 @@ class CdpPage implements PageHandle {
     } finally {
       await handle.dispose();
     }
+  }
+
+  async scroll(direction: ScrollDirection): Promise<void> {
+    await this.page.evaluate((where: string) => {
+      const step = window.innerHeight * 0.9;
+      if (where === 'top') window.scrollTo({ top: 0 });
+      else if (where === 'bottom') window.scrollTo({ top: document.body.scrollHeight });
+      else window.scrollBy({ top: where === 'down' ? step : -step });
+    }, direction);
   }
 
   content(): Promise<string> {

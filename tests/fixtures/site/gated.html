@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Publications — accès conditionné</title>
+  </head>
+  <body>
+    <!-- The expected content exists but is hidden until the modal is dismissed.
+         This is the everyday shape of the problem L1 exists to solve: nothing is
+         broken, the script simply cannot see what it came for yet. -->
+    <div id="age-modal" role="dialog" aria-label="Confirmation">
+      <p>Confirmez que vous avez l'âge requis.</p>
+      <button id="confirm-age" data-fake-hides="#age-modal" data-fake-shows=".publication-list">
+        J'accepte
+      </button>
+      <!-- Must never be clicked by a heuristic: it commits us to something. -->
+      <a id="modal-signin" href="/signin.html">Se connecter</a>
+    </div>
+
+    <h1>Publications</h1>
+
+    <ul class="publication-list" style="display:none">
+      <li class="publication">
+        <a class="title" href="/publications/rapport-2026.html">Rapport annuel 2026</a>
+        <span class="date">2026-03-14</span>
+        <a class="download" href="/publications/rapport-2026.pdf">PDF</a>
+      </li>
+    </ul>
+
+    <script>
+      document.getElementById('confirm-age').addEventListener('click', function () {
+        document.getElementById('age-modal').style.display = 'none';
+        document.querySelector('.publication-list').style.display = 'block';
+      });
+    </script>
+  </body>
+</html>

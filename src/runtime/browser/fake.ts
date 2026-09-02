@@ -60,7 +60,7 @@ export interface FakeSite {
 
 /** Records what a workflow did, so tests can assert on behaviour, not just output. */
 export interface FakeJournalEntry {
-  readonly action: 'navigate' | 'click' | 'fetch' | 'screenshot' | 'wait';
+  readonly action: 'navigate' | 'click' | 'fetch' | 'screenshot' | 'wait' | 'scroll';
   readonly target: string;
 }
 
@@ -339,11 +339,33 @@ class FakePage implements PageHandle {
       }
     }
 
+    // The symmetric case: dismissing an overlay usually reveals what it covered.
+    const shows = element.getAttribute('data-fake-shows');
+    if (shows !== null) {
+      for (const target of Array.from(this.document.querySelectorAll(shows))) {
+        const style = (target.getAttribute('style') ?? '').replace(/display\s*:\s*none;?/gi, '');
+        target.setAttribute('style', `${style};display:block`);
+      }
+    }
+
     const href = element.getAttribute('href');
     if (href !== null && !href.startsWith('#')) {
       const resolved = canonicalizeUrl(href, { base: this.currentUrl });
       if (resolved.ok) return this.navigate(resolved.canonical).then(() => undefined);
     }
+    return Promise.resolve();
+  }
+
+  /**
+   * A no-op: the fake models a DOM, not a layout, so there is no viewport to move.
+   *
+   * Deliberately not faked with a `data-fake-*` hint — pretending to scroll would
+   * make a scroll-dependent test pass here while failing in a real browser, which is
+   * worse than not covering it. Scroll behaviour is verified against Chrome.
+   */
+  scroll(): Promise<void> {
+    this.assertOpen();
+    this.journal.push({ action: 'scroll', target: 'page' });
     return Promise.resolve();
   }
 

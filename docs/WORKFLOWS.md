@@ -192,7 +192,77 @@ C'est un mécanisme de **répartition de charge**, pas de dissimulation.
 
 ---
 
-## 5. Règles
+## 5. Recovery — quand la page n'est pas celle attendue
+
+Le pattern visé (spec §5) :
+
+```text
+script -> script -> état inattendu -> recovery -> retour au script
+```
+
+Le recovery est un **garde**, pas une étape. `ctx.recover()` rend la main
+immédiatement si l'état attendu est déjà là : en protéger une action ne coûte rien
+sur le chemin nominal.
+
+```ts
+await ctx.recover(page, {
+  goal: 'Accéder à la liste des publications',
+  expectedState: { selector: '.publication-list' },
+  allowedActions: ['click', 'scroll', 'close_overlay'],
+  maxSteps: 4,
+});
+```
+
+### Les niveaux
+
+```text
+L0  votre script                 — le chemin nominal
+L1  heuristiques déterministes   — overlays, scroll. Aucun appel LLM.
+L2  LLM sur un digest DOM        — texte seul, contexte minimal
+L3  LLM + screenshot             — dernier recours, le plus coûteux
+L4  échec explicite              — RecoveryFailedError, journalisé et rapporté
+```
+
+L'escalade est **monotone et budgétée** : elle s'arrête dès que l'état attendu
+apparaît. Un run qui ne rencontre pas de surprise n'atteint jamais L2, et `llmCalls`
+dans le rapport le prouve.
+
+Sans provider configuré, le recovery s'arrête à L1 — configuration parfaitement
+valide, qui couvre l'écrasante majorité des obstacles.
+
+### Garde-fous
+
+- Le modèle **choisit parmi** les contrôles qu'on lui a montrés — tous jugés
+  interactables par un humain. Un sélecteur inventé est refusé.
+- Une action hors de `allowedActions` est refusée.
+- Une réponse illisible est une étape échouée, jamais un crash.
+- Un provider en panne dégrade en L4, pas en erreur de transport opaque.
+- Chaque appel est décompté de `maxLlmCalls` **avant** d'être émis.
+
+### Overlays seuls
+
+Quand vous savez qu'il n'y a qu'une bannière à écarter, inutile de passer par le
+recovery :
+
+```ts
+await ctx.dismissOverlays(page);   // déterministe, jamais de LLM
+```
+
+Les heuristiques ne cliquent jamais un contrôle qui engage — « Se connecter »,
+« S'abonner », « Payer », « Gérer mes choix ». Un workflow qui doit se connecter le
+fait dans son propre script, délibérément.
+
+### Blocage : on s'arrête
+
+Si le site oppose un CAPTCHA, un 403 ou une limitation explicite, le recovery lève
+`BlockedError` **sans consulter le modèle**. Le run se termine `completed` avec
+`stopReason: blocked:<raison>` — un constat rapporté, pas un échec à retenter.
+
+Aucun contournement n'est à écrire, et aucun ne sera accepté en revue.
+
+---
+
+## 6. Règles
 
 1. **Découverte et collecte sont deux phases.** Alimentez la frontier, puis
    consommez-la. C'est ce qui rend possibles la reprise, la priorisation et la
@@ -206,14 +276,16 @@ C'est un mécanisme de **répartition de charge**, pas de dissimulation.
 4. **Fermez vos pages.** `await page.close()`, y compris en cas d'erreur (`finally`).
 5. **Une ressource illisible n'arrête pas la collecte.** `ctx.frontier.fail(entry, …)`
    et on continue ; le run reste vert, le problème apparaît dans le rapport.
-6. **Face à un blocage — CAPTCHA, 403 systématique, limitation explicite — arrêtez.**
-   Journalisez et rapportez. Aucun contournement n'est à écrire, et aucun ne sera
-   accepté en revue.
-7. **Ne dépendez pas d'un numéro de page.** L'identité est l'URL canonique.
+6. **Face à un blocage, arrêtez.** Le runtime le détecte et le rapporte
+   (cf. §5) ; ne le contournez pas.
+7. **Ne forcez jamais un appel LLM là où une heuristique suffit.** Déclarez
+   `maxLlmCalls: 0` quand le workflow doit s'en passer : cela documente l'intention
+   *et* la fait respecter.
+8. **Ne dépendez pas d'un numéro de page.** L'identité est l'URL canonique.
 
 ---
 
-## 6. Tester un workflow
+## 7. Tester un workflow
 
 Sans navigateur, avec `FakeBackend` :
 
@@ -232,7 +304,7 @@ le démarrage de Chrome. Voir `tests/e2e/workflow-run.test.ts`.
 
 ---
 
-## 7. Lancer
+## 8. Lancer
 
 ```bash
 npm run build

@@ -153,7 +153,7 @@ sur le heartbeat ; reprise des baux détenus par un run mort ; revisite par
 
 ---
 
-### Lot 5 — Recovery
+### Lot 5 — Recovery ✅ *terminé*
 
 Heuristiques L1 (bannières cookies, modales, overlays, newsletter, murs de login).
 Interface `LlmProvider` + adaptateur OpenRouter. Recovery L2 sur DOM / arbre a11y.
@@ -162,6 +162,13 @@ journalisation + rapport.
 
 *Terminé quand* : un overlay injecté dans les fixtures est franchi par L1 **sans
 appel LLM** ; l'escalade et le budget LLM sont testés avec un provider simulé.
+
+**Livré** : le critère est vérifié sur les deux backends, Chrome réel inclus — une
+modale masquant le contenu attendu est franchie à L1 avec `llmCalls: 0`. Heuristiques
+L1 (bannières, modales, newsletters) avec liste noire de contrôles à ne jamais
+cliquer ; port `LlmProvider` + adaptateur OpenAI-compatible (OpenRouter) + double
+scripté ; escalade L2 (DOM) puis L3 (screenshot) puis L4 explicite ; détection de
+blocage → arrêt propre `blocked:<raison>` sans jamais consulter le modèle. 434 tests.
 
 ---
 

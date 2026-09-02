@@ -47,6 +47,9 @@ export function buildFakeSite(origin = 'http://127.0.0.1:9999'): FakeSite {
 
   at('/index.html', html('index.html'));
   at('/page-2.html', html('page-2.html'));
+  at('/gated.html', html('gated.html'));
+  at('/challenged.html', html('challenged.html'));
+  at('/forbidden', { status: 403, body: '<html><body>Access denied</body></html>' });
   at('/publications/rapport-2026.html', html('publications/rapport-2026.html'));
   at('/publications/etude-marche.html', html('publications/etude-marche.html'));
   at('/publications/note-technique.html', html('publications/note-technique.html'));

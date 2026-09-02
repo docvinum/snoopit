@@ -11,6 +11,7 @@ import { CdpBackend } from '../runtime/browser/cdp.js';
 import { listWorkflows, loadWorkflow } from '../runtime/workflow/load.js';
 import { runWorkflow } from '../runtime/workflow/runner.js';
 import { dueJobs, evaluateJobs } from '../scheduler/scheduler.js';
+import { providerFromConfig } from '../runtime/recovery/llm/from-config.js';
 import { parseDuration } from '../util/time.js';
 import { canonicalizeUrl } from '../runtime/navigation/canonical.js';
 import { appliedMigrations } from '../state/db.js';
@@ -156,12 +157,15 @@ async function cmdRun(
     });
 
     const browser = await CdpBackend.connect({ cdpUrl: loaded.config.browser.cdpUrl });
+    const { provider, reason } = providerFromConfig(loaded.config);
+    if (reason !== null) console.error(`[llm] ${reason}`);
 
     try {
       const outcome = await runWorkflow(definition, {
         store,
         job,
         browser,
+        llm: provider,
         dataDir: loaded.paths.dataDir,
         trigger: 'manual',
         heartbeatMs: parseDuration(loaded.config.runs.heartbeatInterval),
@@ -226,6 +230,7 @@ async function cmdTick(
           store,
           job,
           browser,
+          llm: providerFromConfig(loaded.config).provider,
           dataDir: loaded.paths.dataDir,
           trigger: 'schedule',
           pagesPerRun,

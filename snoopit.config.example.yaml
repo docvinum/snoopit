@@ -18,7 +18,9 @@ browser:
   navigationTimeout: 30s
 
 llm:
-  # Any OpenAI-compatible endpoint. Used only for L2/L3 recovery, never nominally.
+  # Any OpenAI-compatible endpoint. Used only for L2/L3 recovery, never nominally —
+  # a run that meets no surprise makes zero calls here. With no key set, recovery
+  # stops at L1, which is a supported configuration rather than a degraded one.
   provider: openrouter
   baseUrl: https://openrouter.ai/api/v1
   model: anthropic/claude-sonnet-4.6

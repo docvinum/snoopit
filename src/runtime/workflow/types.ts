@@ -16,6 +16,8 @@ import type { Artifact, FrontierEntry, Job, Page, Run, RunBudget } from '../../s
 import type { NavigationResult } from '../browser/types.js';
 import type { RunEventEmitter } from '../events/emitter.js';
 import type { BudgetGuard } from '../budget/guard.js';
+import type { RecoverOptions, RecoveryOutcome } from '../recovery/recover.js';
+import type { DismissResult } from '../recovery/heuristics.js';
 
 export interface VisitOptions {
   readonly waitFor?: string;
@@ -110,6 +112,23 @@ export interface WorkflowContext {
     page: PageHandle,
     spec: ExtractSpec<F>,
   ): Promise<ExtractedRecord<F>[]>;
+
+  /**
+   * Dismisses recognised overlays deterministically. No LLM, ever.
+   *
+   * Cheap and safe to call before any interaction — the `beforeAction` pattern of
+   * spec §14.
+   */
+  dismissOverlays(page: PageHandle): Promise<DismissResult>;
+
+  /**
+   * Gets the page back to an expected state, escalating L1 -> L2 -> L3 -> L4.
+   *
+   * Returns immediately when the state is already there, so guarding an action with
+   * it costs nothing on the nominal path. Throws `RecoveryFailedError` when every
+   * level is exhausted, and `BlockedError` when the site is refusing us.
+   */
+  recover(page: PageHandle, options: RecoverOptions): Promise<RecoveryOutcome>;
 }
 
 export interface WorkflowDefinition<T = unknown> {

@@ -133,6 +133,18 @@ export async function startFixtureServer(
       return;
     }
 
+    if (pathname === '/forbidden') {
+      res.writeHead(403, { 'content-type': 'text/html; charset=utf-8' });
+      res.end('<html><body><h1>Access denied</h1></body></html>');
+      return;
+    }
+
+    if (pathname === '/rate-limited') {
+      res.writeHead(429, { 'content-type': 'text/plain', 'retry-after': '60' });
+      res.end('Too many requests');
+      return;
+    }
+
     if (pathname === '/server-error') {
       res.writeHead(500, { 'content-type': 'text/plain' });
       res.end('boom');

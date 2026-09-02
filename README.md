@@ -40,7 +40,7 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 
 ## État du projet
 
-**Lot 4 terminé — jalon MVP atteint.** Le recovery arrive au Lot 5.
+**Lot 5 terminé — recovery en place.** Reste le déploiement et la compétence agent (Lot 6).
 
 | Lot | Contenu | Statut |
 |---|---|---|
@@ -49,7 +49,7 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 | 2 | Runtime navigateur minimal | ✅ terminé |
 | 3 | Premier workflow de bout en bout | ✅ terminé |
 | 4 | Scheduler, reprise, budgets | ✅ terminé — **jalon MVP** |
-| 5 | Recovery (heuristiques, puis LLM) | à venir |
+| 5 | Recovery (heuristiques, puis LLM) | ✅ terminé |
 | 6 | Déploiement et documentation agent | à venir |
 
 ---
@@ -141,8 +141,10 @@ Exemples complets : [`workflows/`](workflows/).
 
 1. **La source de vérité est SQLite, jamais le navigateur.** Chrome est un exécutant
    remplaçable ; l'état lui survit.
-2. **Le fonctionnement nominal est déterministe** — DOM, sélecteurs, arbre
-   d'accessibilité, navigation. Un run normal effectue zéro appel LLM.
+2. **Le fonctionnement nominal est déterministe** — DOM, sélecteurs, navigation.
+   Un run normal effectue zéro appel LLM, et `llmCalls` figure dans chaque rapport
+   pour le prouver. Le LLM n'intervient qu'en récupération, après échec des
+   heuristiques déterministes.
 3. **La reprise après interruption est une exigence de premier ordre**, pas une
    optimisation.
 4. **Découverte et collecte sont séparées**, ce qui permet reprise, priorisation,
