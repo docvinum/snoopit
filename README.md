@@ -178,6 +178,8 @@ utilisation minimale du LLM.
 | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) | Outillage, règles TypeScript, frontières d'architecture, tests |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Écrire un workflow : primitives, conventions, exemples |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Installation sur l'OptiPlex, systemd, sauvegarde du profil |
+| [`docs/EXEMPLE-LEBONCOIN.md`](docs/EXEMPLE-LEBONCOIN.md) | Exemple de bout en bout : prérequis + prompt du coding agent pour un workflow leboncoin |
+| [`docs/NOTE-LEBONCOIN-PREPARATION.md`](docs/NOTE-LEBONCOIN-PREPARATION.md) | Journal de la préparation `dell` : profil Chrome authentifié, transfert, portabilité, sauvegarde |
 | [`AGENTS.md`](AGENTS.md) | Instructions pour Claude Code / Codex |
 | [`skills/snoopit/SKILL.md`](skills/snoopit/SKILL.md) | Compétence : écrire un workflow |
 

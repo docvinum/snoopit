@@ -99,6 +99,10 @@ Automatisation possible via un timer systemd, ou :
 0 3 * * * /opt/snoopit/deploy/backup-profile.sh >> /var/log/snoopit-backup.log 2>&1
 ```
 
+Exemple concret — transfert d'un profil authentifié depuis un autre poste, contrôle
+de portabilité macOS → Linux, puis sauvegarde :
+[`NOTE-LEBONCOIN-PREPARATION.md`](NOTE-LEBONCOIN-PREPARATION.md).
+
 ---
 
 ## 5. Exploitation
