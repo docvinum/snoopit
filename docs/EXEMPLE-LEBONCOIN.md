@@ -48,6 +48,11 @@ l'un de :
 Une fois connecté : `sudo ./deploy/backup-profile.sh`. Le profil est la seule chose
 que la base ne peut pas reconstruire.
 
+> Fait sur `dell` le 2026-09-03 : profil créé sur un Mac, transféré par `rsync`,
+> portabilité macOS → Linux contrôlée via un Chrome graphique éphémère, puis
+> sauvegardé. Détail dans
+> [`NOTE-LEBONCOIN-PREPARATION.md`](NOTE-LEBONCOIN-PREPARATION.md).
+
 ### 1.3 Aucun identifiant dans le code ni la configuration
 
 Le login est manuel et hors bande. Le workflow **assume** la session et se contente
