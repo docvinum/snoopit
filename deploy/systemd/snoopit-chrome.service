@@ -29,8 +29,8 @@ WorkingDirectory=/var/lib/snoopit
 # The containment that matters here is the unit's: a dedicated nologin user,
 # ProtectSystem=strict, ProtectHome=true, PrivateTmp=true, and a CDP port that
 # never leaves loopback.
-ExecStart=/usr/bin/google-chrome-stable \
-  --headless=new \
+ExecStart=/usr/bin/xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+  /usr/bin/google-chrome-stable \
   --no-sandbox \
   --remote-debugging-address=127.0.0.1 \
   --remote-debugging-port=9222 \

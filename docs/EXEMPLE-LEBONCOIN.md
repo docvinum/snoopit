@@ -6,8 +6,8 @@
 > aucune modification du runtime.
 
 Cas d'usage de référence : « suivi d'annonces » (`docs/USE_CASES.md`). La cible
-demande en plus une **session authentifiée**, ce qui déplace l'essentiel de l'effort
-vers la préparation du profil Chrome.
+demande une **session authentifiée** *et* un Chrome avec rendu réel (Xvfb) : avec
+`--headless=new` le site ne se charge pas.
 
 ---
 
@@ -26,7 +26,7 @@ et la règle 4 de [`AGENTS.md`](../AGENTS.md) (aucun contournement, aucune
 automatisation d'identité). La session doit déjà exister dans
 `/var/lib/snoopit/chrome-profile/`.
 
-La machine est headless (`--headless=new`), donc on se connecte **une fois**, par
+Chrome tourne sans écran (Xvfb, §1.3), donc on se connecte **une fois**, par
 l'un de :
 
 - **Xvfb + VNC (recommandé)** — service arrêté, un vrai Chrome sur le même profil :
@@ -53,17 +53,60 @@ que la base ne peut pas reconstruire.
 > sauvegardé. Détail dans
 > [`NOTE-LEBONCOIN-PREPARATION.md`](NOTE-LEBONCOIN-PREPARATION.md).
 
-### 1.3 Aucun identifiant dans le code ni la configuration
+### 1.3 Parcourir le site : Chrome sous Xvfb
 
-Le login est manuel et hors bande. Le workflow **assume** la session et se contente
-de rapporter `authenticated: false` s'il rencontre le mur de connexion.
+`--headless=new` s'annonce `HeadlessChrome` : une visite de `https://www.leboncoin.fr/`
+répond **403** avec un interstitiel DataDome, page vide. Un Chrome « vrai » sous
+Xvfb — même binaire, même profil, **sans** `--headless=new` — charge le site
+(**200**, titre « leboncoin, site de petites annonces gratuites »). C'est le cas
+prévu par [`docs/DEPLOYMENT.md`](DEPLOYMENT.md) §7 (rendu complet), pas un
+contournement.
 
-### 1.4 Anti-bot
+Dans `snoopit-chrome.service`, le `ExecStart` devient :
 
-leboncoin filtre agressivement (DataDome). Par conception, sur `403` ou CAPTCHA le
-run se termine `blocked:*` avec un rapport — **c'est un constat, pas une panne**
-(`docs/DEPLOYMENT.md` §6). Garder une cadence sobre (quotidien, fenêtre courte,
-`maxPages` bas) : politesse, pas dissimulation.
+```ini
+ExecStart=/usr/bin/xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+  /usr/bin/google-chrome-stable \
+  --no-sandbox \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/var/lib/snoopit/chrome-profile \
+  --disable-gpu \
+  --disable-dev-shm-usage \
+  --no-first-run \
+  --no-default-browser-check \
+  --window-size=1920,1080 \
+  about:blank
+```
+
+Puis `sudo systemctl daemon-reload && sudo systemctl restart snoopit-chrome`.
+`snoopit doctor` doit rester au vert. Le User-Agent exposé par
+`http://127.0.0.1:9222/json/version` doit dire `Chrome/…`, pas `HeadlessChrome/…`.
+
+Carte des URLs (constatée dans ce Chrome) :
+
+| Page | URL |
+|---|---|
+| Accueil | `https://www.leboncoin.fr/` |
+| Mes recherches | `https://www.leboncoin.fr/my-searches` |
+| Mur de connexion | redirection vers `https://auth.leboncoin.fr/login/?…&from_to=https://www.leboncoin.fr/my-searches` — h1 « Connectez-vous ou créez votre compte leboncoin ». C'est le signal d'une session absente ou expirée. |
+| Résultats d'une recherche | `https://www.leboncoin.fr/recherche?…` — c'est ce que pointe une recherche enregistrée |
+| Annonce | `https://www.leboncoin.fr/ad/<categorie>/<id>` |
+
+Bannière cookies : Didomi (`#didomi-host`). `ctx.dismissOverlays` ; à défaut le
+bouton « Continuer sans accepter » ou `#didomi-agree-to-all`.
+
+Liste d'annonces : `article` contenant `[data-qa-id="aditem_container"]`, lien
+`a[href^="/ad/"]` (titre, prix, localisation dans des `<p>` / `<span>` de la carte).
+
+Le workflow **assume** la session (aucun identifiant dans le code ni la config) et
+rapporte `authenticated: false` s'il atterrit sur `auth.leboncoin.fr`.
+
+### 1.4 Protection anti-bot
+
+leboncoin filtre agressivement (DataDome). Face à un **403**, CAPTCHA ou
+interstitiel DataDome, le run s'arrête et le rapporte : **on ne contourne pas** la
+protection, ni par rotation d'identité ni par autre moyen.
 
 ### 1.5 Clé LLM (optionnelle)
 
@@ -89,9 +132,9 @@ Nouveau fichier `workflows/*.ts` → `npm run check`, `npm run build`, puis
 
 ```text
 Contexte : le dépôt snoopit est déployé sur cette machine (Chrome persistant en CDP
-sur 127.0.0.1:9222, `snoopit doctor` au vert). Le compte leboncoin est DÉJÀ connecté
-dans le profil Chrome persistant — la session est fournie hors bande, tu n'as jamais
-à te connecter.
+sur 127.0.0.1:9222, sous Xvfb — pas --headless=new —, `snoopit doctor` au vert). Le
+compte leboncoin est DÉJÀ connecté dans le profil Chrome persistant — la session
+est fournie hors bande, tu n'as jamais à te connecter.
 
 Lis d'abord skills/snoopit/SKILL.md puis docs/WORKFLOWS.md. Ne touche pas à src/ :
 la livraison attendue est UN SEUL fichier, workflows/leboncoin-recherches.ts.
@@ -100,14 +143,19 @@ Objectif : collecter périodiquement les « recherches enregistrées » du compt
 leboncoin, et pour chacune relever les premières annonces des résultats, de façon à
 détecter les nouveautés d'un run à l'autre.
 
+URLs et sélecteurs déjà constatés (docs/EXEMPLE-LEBONCOIN.md §1.3) :
+  - recherches : https://www.leboncoin.fr/my-searches
+  - résultats  : https://www.leboncoin.fr/recherche?…
+  - annonce    : https://www.leboncoin.fr/ad/<categorie>/<id>
+  - session expirée : redirection vers auth.leboncoin.fr/login (h1 « Connectez-vous
+    ou créez votre compte leboncoin »)
+  - cookies : Didomi #didomi-host ; ctx.dismissOverlays
+  - cartes d'annonces : article [data-qa-id="aditem_container"], a[href^="/ad/"]
+
 ── Étape 1 : exploration (ne code rien encore) ──
-Avec Claude in Chrome, sur la session connectée, ouvre la page des recherches
-enregistrées de leboncoin. Rapporte-moi :
-  - l'URL exacte de cette page, et la forme de l'URL de résultats d'une recherche ;
-  - le sélecteur de la liste, et par recherche : intitulé, critères résumés, lien
-    vers les résultats, compteur éventuel de nouvelles annonces ;
-  - bannière cookies / mur de connexion / challenge anti-bot présents, et à quoi on
-    reconnaît qu'une session n'est plus valide.
+Sur la session connectée, ouvre https://www.leboncoin.fr/my-searches. Rapporte-moi
+le sélecteur de la liste des recherches, et par recherche : intitulé, critères
+résumés, lien vers les résultats, compteur éventuel de nouvelles annonces.
 Attends ma validation avant l'étape 2.
 
 ── Étape 2 : le workflow ──
@@ -115,7 +163,7 @@ Type `collect`. budget: { maxPages: 40, maxDuration: '15m', maxLlmCalls: 0 }.
 Patron deux phases (découverte → collecte) du SKILL.
 
 Phase 1 — découverte :
-  - ctx.visit la page des recherches enregistrées, waitFor le sélecteur de liste,
+  - ctx.visit https://www.leboncoin.fr/my-searches, waitFor le sélecteur de liste,
     ctx.dismissOverlays.
   - Si l'état attendu n'est pas là, ctx.recover en garde (goal: accéder à la liste
     des recherches ; expectedState: le sélecteur de liste ; allowedActions:
@@ -162,7 +210,8 @@ contre le Chrome persistant. Montre-moi report.md et recherches.md.
 - Artifacts et rapports sous `/var/lib/snoopit/data/jobs/leboncoin-recherches/`.
 - `sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js status` pour l'état du job
   (pages, frontier).
-- Un run `blocked:captcha` ou `blocked:*` se termine `completed` : le site a refusé
-  l'accès, le run suivant retentera. On ne contourne pas.
 - Si le rapport indique `authenticated: false`, la session a expiré — refaire
   l'étape 1.2.
+- Si chaque visite tombe sur un interstitiel DataDome (User-Agent `HeadlessChrome`
+  dans `/json/version`), le Chrome tourne encore en `--headless=new` — reprendre
+  l'étape 1.3.

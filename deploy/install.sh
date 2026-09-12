@@ -40,6 +40,10 @@ CHROME_BIN="$(command -v google-chrome-stable || command -v google-chrome || com
 [[ -n "$CHROME_BIN" ]] || { echo "Chrome or Chromium is required" >&2; exit 1; }
 say "Using Chrome at $CHROME_BIN"
 
+XVFB_RUN_BIN="$(command -v xvfb-run || true)"
+[[ -n "$XVFB_RUN_BIN" ]] || { echo "xvfb-run is required for the persistent Chrome display" >&2; exit 1; }
+say "Using Xvfb at $XVFB_RUN_BIN"
+
 # ── Service user and directories ─────────────────────────────────────────────
 if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
   say "Creating system user $SERVICE_USER"
@@ -94,6 +98,7 @@ say "Installing systemd units"
 for unit in snoopit-chrome.service snoopit-tick.service snoopit-tick.timer; do
   sed -e "s#/opt/snoopit#$PREFIX#g" \
       -e "s#/usr/bin/google-chrome-stable#$CHROME_BIN#g" \
+      -e "s#/usr/bin/xvfb-run#$XVFB_RUN_BIN#g" \
       -e "s#^User=snoopit#User=$SERVICE_USER#" \
       -e "s#^Group=snoopit#Group=$SERVICE_USER#" \
       "$REPO_ROOT/deploy/systemd/$unit" > "/etc/systemd/system/$unit"
@@ -104,7 +109,8 @@ say "Applying database migrations"
 sudo -u "$SERVICE_USER" node "$PREFIX/dist/src/cli/main.js" migrate --config "$CONFIG_DIR/snoopit.config.yaml"
 
 say "Starting services"
-systemctl enable --now snoopit-chrome.service
+systemctl enable snoopit-chrome.service
+systemctl restart snoopit-chrome.service
 systemctl enable --now snoopit-tick.timer
 
 say "Done. Check with:"
