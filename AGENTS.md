@@ -74,11 +74,7 @@ exécute.
    aucune règle métier ne construit une commande CDP.
 3. **Aucun secret dans un objet de configuration.** La clé LLM est désignée par le
    *nom* d'une variable d'environnement.
-4. **Aucun contournement de protection.** Face à un CAPTCHA, un 403 ou une
-   limitation : on s'arrête, on journalise, on rapporte. Ni contournement, ni
-   rotation d'identité, ni dissimulation. Une contribution qui en ajoute sera
-   refusée.
-5. **Le LLM n'est pas dans le chemin nominal.** Un run normal fait zéro appel. Si
+4. **Le LLM n'est pas dans le chemin nominal.** Un run normal fait zéro appel. Si
    votre changement en ajoute un, justifiez-le explicitement.
 
 ---
