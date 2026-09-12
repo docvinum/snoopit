@@ -109,7 +109,8 @@ say "Applying database migrations"
 sudo -u "$SERVICE_USER" node "$PREFIX/dist/src/cli/main.js" migrate --config "$CONFIG_DIR/snoopit.config.yaml"
 
 say "Starting services"
-systemctl enable --now snoopit-chrome.service
+systemctl enable snoopit-chrome.service
+systemctl restart snoopit-chrome.service
 systemctl enable --now snoopit-tick.timer
 
 say "Done. Check with:"
