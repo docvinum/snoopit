@@ -20,7 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
-    "snoopit": "npm run build --silent && node dist/cli/main.js"
+    "snoopit": "npm run build --silent && node dist/src/cli/main.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

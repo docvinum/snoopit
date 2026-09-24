@@ -5,9 +5,13 @@
 
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { listWorkflows, loadWorkflow } from '../../src/runtime/workflow/load.js';
+import {
+  defaultWorkflowsDir,
+  listWorkflows,
+  loadWorkflow,
+} from '../../src/runtime/workflow/load.js';
 import { workflow } from '../../src/runtime/workflow/types.js';
 
 function withWorkflowDir(files: Record<string, string>): string {
@@ -40,6 +44,12 @@ describe('listWorkflows', () => {
       'notes.md': '# ignored',
     });
     expect(listWorkflows(dir)).toEqual(['a', 'b']);
+  });
+
+  it('resolves the default directory to a plain filesystem path', () => {
+    // Derived from `import.meta.url`: it must be decoded (no `%20`), not the raw
+    // URL pathname, or an install path with a space finds no workflow at all.
+    expect(defaultWorkflowsDir()).toBe(resolve(import.meta.dirname, '../../workflows'));
   });
 
   it('returns an empty list for a missing directory', () => {

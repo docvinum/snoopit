@@ -135,4 +135,48 @@ CREATE INDEX idx_events_run  ON events(run_id, id);
 CREATE INDEX idx_events_type ON events(job_id, type, at);
 `;
 
-export const MIGRATIONS: readonly Migration[] = [{ id: 1, name: 'init', sql: M001_INIT }];
+/**
+ * Tracked items: things a job follows by a stable identifier of the *site's*, not by
+ * URL — a classified ad, a product, a publication. `crawl_pages` answers "did this
+ * page change?"; `items` answers "is this ad new, did its price move, is it gone?"
+ * across runs, without a workflow diffing last run's JSON by hand (which would put
+ * state outside SQLite).
+ *
+ * `item_changes` is the history: one row per appearance, change, disappearance or
+ * return, with the field-level diff — a price series is a query, not a reconstruction.
+ */
+const M002_ITEMS = `
+CREATE TABLE items (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id           TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  kind             TEXT NOT NULL,
+  key              TEXT NOT NULL,
+  fields_json      TEXT NOT NULL,
+  fields_hash      TEXT NOT NULL,
+  status           TEXT NOT NULL DEFAULT 'present' CHECK (status IN ('present','gone')),
+  first_seen_at    TEXT NOT NULL,
+  last_seen_at     TEXT NOT NULL,
+  last_changed_at  TEXT,
+  gone_at          TEXT,
+  last_run_id      TEXT,
+  seen_count       INTEGER NOT NULL DEFAULT 1,
+  change_count     INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (job_id, kind, key)
+);
+CREATE INDEX idx_items_kind ON items(job_id, kind, status);
+
+CREATE TABLE item_changes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id    INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  run_id     TEXT,
+  at         TEXT NOT NULL,
+  change     TEXT NOT NULL CHECK (change IN ('new','changed','gone','returned')),
+  diff_json  TEXT
+);
+CREATE INDEX idx_item_changes_item ON item_changes(item_id, id);
+`;
+
+export const MIGRATIONS: readonly Migration[] = [
+  { id: 1, name: 'init', sql: M001_INIT },
+  { id: 2, name: 'items', sql: M002_ITEMS },
+];

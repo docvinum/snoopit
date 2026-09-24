@@ -10,23 +10,40 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import type { BrowserBackend, PageHandle } from '../browser/types.js';
 import type { ExtractedRecord, ExtractSpec, FieldMap } from '../extraction/spec.js';
-import { canonicalizeUrl } from '../navigation/canonical.js';
-import { downloadTo } from '../downloads/download.js';
-import { artifactPath } from '../downloads/paths.js';
+import { canonicalizeUrl, siteHost } from '../navigation/canonical.js';
+import { AuthRequiredError, detectLoginWall } from '../navigation/session.js';
+import { BlockedError } from '../recovery/blocking.js';
+import { fetchDownload, writeDownload } from '../downloads/download.js';
+import { artifactPath, versionedPath } from '../downloads/paths.js';
 import type { RunEventEmitter } from '../events/emitter.js';
 import type { BudgetGuard } from '../budget/guard.js';
 import type { Store } from '../../state/store.js';
-import type { Artifact, FrontierEntry, Job, Run } from '../../state/types.js';
+import type {
+  Artifact,
+  FrontierEntry,
+  Item,
+  ItemChange,
+  ItemFields,
+  ItemStatus,
+  Job,
+  Run,
+} from '../../state/types.js';
 import { contentHash } from '../../util/hash.js';
 import { isoFromNow, parseDuration } from '../../util/time.js';
 import { enqueueDueRevisits } from '../../scheduler/revisit.js';
 import { dismissOverlays, type DismissResult } from '../recovery/heuristics.js';
-import { recover, type RecoverOptions, type RecoveryOutcome } from '../recovery/recover.js';
+import {
+  probeBlocking,
+  recover,
+  type RecoverOptions,
+  type RecoveryOutcome,
+} from '../recovery/recover.js';
 import type { LlmProvider } from '../recovery/llm/provider.js';
 import type {
   CollectOptions,
   CollectResult,
   DiscoverOptions,
+  ItemObservation,
   VisitOptions,
   VisitResult,
   WorkflowContext,
@@ -107,15 +124,55 @@ export class RunContext implements WorkflowContext {
       ok: page.status() === null ? true : page.status()! >= 200 && page.status()! < 400,
     };
 
+    // A refusal or a lost session is checked *before* anything is recorded: the
+    // challenge page or the login form must never be stored as this URL's content.
+    await this.assertAccess(page, url, canonicalUrl, navigation.ok, options);
+
     if (options.waitFor !== undefined) {
-      await page.waitForReady({
-        selector: options.waitFor,
-        ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-      });
+      try {
+        await page.waitForReady({
+          selector: options.waitFor,
+          ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+        });
+      } catch (error) {
+        // A client-side redirect or a challenge injected after `load` shows up here
+        // as a missing selector. The more specific explanation wins over a timeout.
+        await this.assertAccess(page, url, canonicalUrl, navigation.ok, options);
+        throw error;
+      }
     }
 
     if (options.record === false) {
-      return { page, navigation, record: null, changed: false, firstVisit: false };
+      return { page, navigation, record: null, changed: false, firstVisit: false, offSite: false };
+    }
+
+    // Landing on another site is not a visit of this URL. Hashing whatever answered
+    // there would report the page as changed when it is merely elsewhere.
+    const requestedHost = siteHost(url);
+    const finalHost = siteHost(navigation.url);
+    const expectedHost =
+      options.session?.expectHost === undefined
+        ? null
+        : siteHost(`https://${options.session.expectHost}`);
+    if (navigation.ok && finalHost !== requestedHost && finalHost !== expectedHost) {
+      const record = this.store.pages.recordError({
+        jobId: this.job.id,
+        url,
+        canonicalUrl,
+        error: `redirected off-site to ${finalHost ?? navigation.url}`,
+        httpStatus: navigation.status,
+      });
+      // A unit of crawl work all the same: a loop of off-site redirects stays bounded.
+      this.budget.recordPage();
+      this.events.emit({
+        type: 'HTTP_ERROR',
+        level: 'warn',
+        url,
+        canonicalUrl,
+        message: `Redirigé hors site vers ${navigation.url}`,
+        data: { status: navigation.status, redirectChain: navigation.redirectChain },
+      });
+      return { page, navigation, record, changed: false, firstVisit: false, offSite: true };
     }
 
     // A failed fetch is recorded as an error against the page, never as a visit:
@@ -156,7 +213,7 @@ export class RunContext implements WorkflowContext {
         data: { status, redirectChain: navigation.redirectChain },
       });
 
-      return { page, navigation, record, changed: false, firstVisit: false };
+      return { page, navigation, record, changed: false, firstVisit: false, offSite: false };
     }
 
     const title = (await page.query('title'))?.text ?? null;
@@ -196,7 +253,51 @@ export class RunContext implements WorkflowContext {
       record: visit.page,
       changed: visit.changed,
       firstVisit: visit.firstVisit,
+      offSite: false,
     };
+  }
+
+  /**
+   * Stops the run when the site refuses us or the session is gone.
+   *
+   * Widgets are always probed; page wording only when the answer was already an
+   * error status, where a challenge page is likely and an article merely
+   * mentioning "captcha" is not. The page is closed before throwing: nothing
+   * further will be done with it.
+   */
+  private async assertAccess(
+    page: PageHandle,
+    url: string,
+    canonicalUrl: string,
+    ok: boolean,
+    options: VisitOptions,
+  ): Promise<void> {
+    const signal = await probeBlocking(page, { text: !ok });
+    if (signal !== null) {
+      this.store.pages.recordError({
+        jobId: this.job.id,
+        url,
+        canonicalUrl,
+        error: `blocked: ${signal.reason}`,
+        httpStatus: page.status(),
+      });
+      await page.close();
+      throw new BlockedError(url, signal);
+    }
+
+    const session = options.session;
+    if (session === undefined) return;
+    const evidence = detectLoginWall({
+      finalUrl: page.url(),
+      expectation: session,
+      loginSelectorPresent:
+        session.loginSelector !== undefined && (await page.query(session.loginSelector)) !== null,
+    });
+    if (evidence !== null) {
+      const finalUrl = page.url();
+      await page.close();
+      throw new AuthRequiredError(url, finalUrl, evidence);
+    }
   }
 
   readonly frontier = {
@@ -273,51 +374,61 @@ export class RunContext implements WorkflowContext {
       this.budget.assertOk('page');
       this.budget.assertOk('download');
       const canonicalUrl = this.canonical(url, page.url());
-      const download = await downloadTo(page, url, {
+      const fetched = await fetchDownload(page, url, {
         jobId: this.job.id,
-        dataDir: this.dataDir,
         ...(options.dir === undefined ? {} : { dir: options.dir }),
         ...(options.filename === undefined ? {} : { filename: options.filename }),
         ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       });
 
-      // Content-addressed deduplication: the same bytes republished at a second URL
-      // are not a second artifact, and re-recording them would inflate the report.
+      // The fetch happened whatever comes next, so it is charged whatever comes
+      // next. Charging only new artifacts would leave a workflow that re-collects
+      // known documents bounded by nothing.
+      this.store.runs.increment(this.run.id, 'downloadedBytes', fetched.bytes);
+      this.budget.recordBytes(fetched.bytes);
+      this.budget.recordPage();
+
+      // Content-addressed deduplication: the same bytes, at this URL or republished
+      // at another one, are not a second artifact. Checked before anything is
+      // written, so an existing file is never touched.
       if (options.dedupe !== false) {
-        const existing = this.store.artifacts
-          .findByHash(this.job.id, download.contentHash)
-          .find((candidate) => candidate.path === download.path);
-        if (existing !== undefined) {
-          return { artifact: existing, deduplicated: true };
+        const existing = this.store.artifacts.findByHash(this.job.id, fetched.contentHash);
+        const match = existing.find((candidate) => candidate.path === fetched.path) ?? existing[0];
+        if (match !== undefined) {
+          return { artifact: match, deduplicated: true };
         }
       }
+
+      // Different bytes at a path an earlier artifact already owns: a new version,
+      // stored next to the old one. Overwriting would leave the earlier artifact's
+      // hash describing a file that no longer exists.
+      const owners = this.store.artifacts.findByPath(this.job.id, fetched.path);
+      const path = owners.every((owner) => owner.contentHash === fetched.contentHash)
+        ? fetched.path
+        : versionedPath(fetched.path, fetched.contentHash);
+      await writeDownload(this.dataDir, path, fetched.body);
 
       const pageRow = this.store.pages.get(this.job.id, canonicalUrl);
       const artifact = this.store.artifacts.create({
         jobId: this.job.id,
         runId: this.run.id,
         pageId: pageRow?.id ?? null,
-        sourceUrl: download.url,
+        sourceUrl: fetched.url,
         canonicalUrl,
-        kind: download.mediaType === 'application/pdf' ? 'pdf' : 'file',
-        path: download.path,
-        mediaType: download.mediaType,
-        bytes: download.bytes,
-        contentHash: download.contentHash,
+        kind: fetched.mediaType === 'application/pdf' ? 'pdf' : 'file',
+        path,
+        mediaType: fetched.mediaType,
+        bytes: fetched.bytes,
+        contentHash: fetched.contentHash,
       });
 
       this.store.runs.increment(this.run.id, 'artifactsCreated');
-      this.store.runs.increment(this.run.id, 'downloadedBytes', download.bytes);
-      // Bytes are counted after the fact: the size is only known once the body has
-      // arrived, so this limit guards disk and the next iteration, not this transfer.
-      this.budget.recordBytes(download.bytes);
-      this.budget.recordPage();
       this.events.emit({
         type: 'ARTIFACT_CREATED',
-        url: download.url,
+        url: fetched.url,
         canonicalUrl,
-        message: download.path,
-        data: { bytes: download.bytes, mediaType: download.mediaType },
+        message: path,
+        data: { bytes: fetched.bytes, mediaType: fetched.mediaType },
       });
 
       return { artifact, deduplicated: false };
@@ -338,6 +449,69 @@ export class RunContext implements WorkflowContext {
         dir: 'screenshots',
         sourceUrl: page.url(),
       });
+    },
+  };
+
+  readonly items = {
+    observe: (kind: string, key: string, fields: ItemFields): ItemObservation => {
+      if (kind.trim() === '' || key.trim() === '') {
+        throw new Error(`items.observe: kind and key are required (got "${kind}", "${key}")`);
+      }
+      const observation = this.store.items.observe({
+        jobId: this.job.id,
+        kind,
+        key,
+        fields,
+        runId: this.run.id,
+      });
+
+      if (observation.status !== 'unchanged') {
+        const type =
+          observation.status === 'new'
+            ? 'ITEM_NEW'
+            : observation.status === 'returned'
+              ? 'ITEM_RETURNED'
+              : 'ITEM_CHANGED';
+        const url = fields['url'];
+        this.events.emit({
+          type,
+          ...(typeof url === 'string' ? { url } : {}),
+          message: `${kind}:${key}`,
+          data: { kind, key, ...(observation.status === 'new' ? {} : { diff: observation.diff }) },
+        });
+      }
+      return observation;
+    },
+
+    markMissing: (kind: string): Item[] => {
+      const gone = this.store.items.markMissing({
+        jobId: this.job.id,
+        kind,
+        runId: this.run.id,
+      });
+      for (const item of gone) {
+        const url = item.fields['url'];
+        this.events.emit({
+          type: 'ITEM_GONE',
+          ...(typeof url === 'string' ? { url } : {}),
+          message: `${kind}:${item.key}`,
+          data: { kind, key: item.key },
+        });
+      }
+      return gone;
+    },
+
+    get: (kind: string, key: string): Item | null => this.store.items.get(this.job.id, kind, key),
+
+    list: (kind?: string, options: { status?: ItemStatus } = {}): Item[] =>
+      this.store.items.list(this.job.id, {
+        ...(kind === undefined ? {} : { kind }),
+        ...(options.status === undefined ? {} : { status: options.status }),
+      }),
+
+    history: (kind: string, key: string): ItemChange[] => {
+      const item = this.store.items.get(this.job.id, kind, key);
+      return item === null ? [] : this.store.items.history(item.id);
     },
   };
 

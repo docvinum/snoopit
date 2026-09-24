@@ -99,6 +99,22 @@ export function artifactPath(input: ArtifactPathInput): string {
   return posix.join('jobs', sanitizeSegment(input.jobId), 'artifacts', dir, named);
 }
 
+/**
+ * The path for a *new version* of a file already stored at `path`.
+ *
+ * A document republished at the same URL with different bytes must not overwrite
+ * the earlier file: its artifact row still carries the old hash, and provenance
+ * that no longer matches the bytes on disk is worse than none. The version is
+ * named by its own content, so it stays deterministic — collecting the same bytes
+ * twice still lands on the same file.
+ */
+export function versionedPath(path: string, contentHash: string): string {
+  const version = contentHash.replace(/^[a-z0-9]+:/, '').slice(0, 8);
+  const extension = posix.extname(path);
+  const stem = extension === '' ? path : path.slice(0, -extension.length);
+  return `${stem}.${version}${extension}`;
+}
+
 /** Directory holding one run's outputs, relative to the data directory. */
 export function runDir(jobId: string, runId: string): string {
   return posix.join('jobs', sanitizeSegment(jobId), 'runs', sanitizeSegment(runId));

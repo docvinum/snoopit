@@ -50,6 +50,8 @@ const CAPTCHA_SELECTORS: readonly string[] = [
   '#challenge-form',
   '[data-cf-challenge]',
   '.cf-turnstile',
+  // DataDome's interstitial, served by leboncoin among others.
+  'iframe[src*="captcha-delivery.com"]',
 ];
 
 /** Phrases that name a challenge, in the languages our fixtures and targets use. */

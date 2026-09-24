@@ -47,6 +47,26 @@ describe('JobRepository', () => {
     expect(store.jobs.list()).toHaveLength(1);
   });
 
+  it('keeps a stored schedule and enabled flag when re-registered without them', () => {
+    // What `snoopit run` does: re-register the job from its workflow definition,
+    // which knows nothing of the schedule an operator set or of a disabled flag.
+    const schedule = { frequency: 'daily' as const, window: { from: '08:00', to: '10:00' } };
+    store.jobs.upsert({ name: 'Demo Job', workflow: 'a.ts', schedule, budget: { maxPages: 5 } });
+    store.jobs.setEnabled('demo-job', false);
+
+    const again = store.jobs.upsert({ name: 'Demo Job', workflow: 'a.ts' });
+
+    expect(again.schedule).toEqual(schedule);
+    expect(again.enabled).toBe(false);
+    expect(again.budget).toEqual({ maxPages: 5 });
+  });
+
+  it('still clears a schedule when asked to explicitly', () => {
+    store.jobs.upsert({ name: 'Demo Job', workflow: 'a.ts', schedule: { frequency: 'daily' } });
+    const cleared = store.jobs.upsert({ name: 'Demo Job', workflow: 'a.ts', schedule: null });
+    expect(cleared.schedule).toBeNull();
+  });
+
   it('filters disabled jobs on request', () => {
     const id = seedJob();
     store.jobs.upsert({ name: 'Other', workflow: 'o.ts' });

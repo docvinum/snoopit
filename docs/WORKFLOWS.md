@@ -44,9 +44,11 @@ pas oublier de le faire.
 
 | Vous écrivez | Le runtime fait |
 |---|---|
-| `ctx.visit(url)` | Ouvre, enregistre la visite, calcule le hash de contenu, détecte le changement, émet `PAGE_VISITED` / `CONTENT_CHANGED` / `HTTP_ERROR` |
+| `ctx.visit(url)` | Ouvre, arrête le run si le site refuse l'accès ou si la session a expiré, enregistre la visite, calcule le hash de contenu, détecte le changement, émet `PAGE_VISITED` / `CONTENT_CHANGED` / `HTTP_ERROR` |
 | `ctx.frontier.discover(url)` | Déduplique par URL canonique, crée la page, émet `PAGE_DISCOVERED` |
-| `ctx.artifacts.collect(page, url)` | Télécharge via la session de la page, hash, écrit sur disque, enregistre la provenance, émet `ARTIFACT_CREATED` |
+| `ctx.artifacts.collect(page, url)` | Télécharge via la session de la page, hash, déduplique, écrit sur disque sans jamais écraser une version antérieure, enregistre la provenance, émet `ARTIFACT_CREATED` |
+| `ctx.items.observe(kind, key, champs)` | Compare à l'observation précédente, conserve l'historique, émet `ITEM_NEW` / `ITEM_CHANGED` / `ITEM_RETURNED` |
+| une page oubliée ouverte | La ferme en fin de run, même si le workflow a levé une exception |
 | `return { ... }` | Est repris tel quel dans `report.json` |
 
 Vous n'écrivez jamais de SQL, jamais de CDP, jamais de chemin de fichier absolu.
@@ -66,10 +68,35 @@ const { page, navigation, changed, firstVisit } = await ctx.visit(url, {
 ```
 
 `navigation` porte `status`, `redirectChain` et `ok`. **Vous devez fermer la page**
-(`await page.close()`).
+(`await page.close()`) ; le runner ferme en fin de run celles qu'un workflow aurait
+oubliées, mais c'est un filet, pas une méthode.
 
 `changed` est vrai quand le hash de contenu diffère de la visite précédente — c'est
 le signal de veille.
+
+Ce que `visit` refuse d'enregistrer comme une visite :
+
+- **Un refus du site** — 403, 429, widget de challenge (reCAPTCHA, hCaptcha,
+  Turnstile, DataDome…) : le run s'arrête aussitôt (`blocked:<raison>`), **sans**
+  que le workflow ait à appeler `ctx.recover`. Voir §5.
+- **Une redirection vers un autre site** (`www.` mis à part) : `offSite` vaut `true`,
+  la page est enregistrée en erreur, pas avec le contenu d'un autre site.
+- **Un mur de connexion**, si vous déclarez ce qu'est une visite connectée :
+
+```ts
+const { page } = await ctx.visit('https://www.leboncoin.fr/my-searches', {
+  waitFor: '[data-qa-id="saved-search"]',
+  session: {
+    expectHost: 'www.leboncoin.fr',   // finir ailleurs (auth.leboncoin.fr) = session perdue
+    loginSelector: '#login-form',     // optionnel : mur de connexion rendu sur place
+  },
+});
+```
+
+Le run s'arrête alors `completed` avec `stopReason: auth-required` et un événement
+`AUTH_REQUIRED`, **avant** que la page de connexion ne soit enregistrée comme le
+contenu de l'URL. La réparation est humaine : se reconnecter dans le profil Chrome.
+snoopit ne se connecte jamais tout seul.
 
 ### Découvrir
 
@@ -95,10 +122,49 @@ for (const entry of ctx.frontier.take(50)) {
     });
     ctx.frontier.complete(entry);
   } catch (error) {
-    ctx.frontier.fail(entry, String(error));   // retenté au prochain run
+    ctx.frontier.fail(entry, String(error));   // reste en échec, visible au rapport
   }
 }
 ```
+
+La déduplication est **par contenu** : si le job détient déjà ces octets exacts, à
+cette URL ou à une autre, `deduplicated` vaut `true`, `artifact` est l'artefact
+existant et rien n'est écrit. Le fichier a tout de même été transféré et compte dans
+le budget (`maxPages`, octets). Si le contenu a changé à la même URL, la nouvelle
+version est écrite **à côté** de l'ancienne (`rapport-ab12cd.3f9e0a1b.pdf`) : un
+fichier déjà enregistré n'est jamais écrasé, et chaque artefact garde le hash de ses
+octets sur disque.
+
+### Suivre des éléments
+
+Pour ce que le site identifie lui-même — une annonce, un produit — et qu'on veut
+suivre d'un run à l'autre, champ par champ :
+
+```ts
+for (const ad of annonces) {
+  const { status, diff } = ctx.items.observe(`annonce:${rechercheId}`, ad.id, {
+    titre: ad.titre,
+    prix: ad.prix,          // un nombre, pas « 250 € », pour que le diff soit exploitable
+    url: ad.url,
+  });
+  // status : 'new' | 'changed' | 'returned' | 'unchanged'
+  // diff   : { prix: { from: 250, to: 220 } }
+}
+// Seulement si la liste a été lue EN ENTIER :
+const disparues = ctx.items.markMissing(`annonce:${rechercheId}`);
+```
+
+| Méthode | Rôle |
+|---|---|
+| `ctx.items.observe(kind, key, champs)` | Enregistre l'observation, renvoie `status` et `diff` |
+| `ctx.items.markMissing(kind)` | Marque `gone` les éléments de `kind` non vus par ce run |
+| `ctx.items.get(kind, key)` / `ctx.items.list(kind)` | Relit l'état courant |
+| `ctx.items.history(kind, key)` | Apparitions, changements, disparitions, retours — l'historique des prix en découle |
+
+L'état vit dans SQLite (tables `items` et `item_changes`), pas dans le JSON du run
+précédent. `markMissing` après la seule première page de résultats déclarerait
+disparu tout ce qui est en page deux : ne l'appelez que sur un ensemble complet, et
+choisissez `kind` en conséquence (une valeur par liste lue en entier).
 
 ### Extraire
 
@@ -181,8 +247,16 @@ Déclarée sur le job, pas dans le workflow :
 schedule:
   frequency: daily          # manual | hourly | daily | weekly
   window: { from: "08:00", to: "10:00" }
+  timeZone: Europe/Paris    # sinon scheduler.timeZone de la config, sinon UTC
   pagesPerRun: { min: 10, max: 100 }
 ```
+
+La fenêtre se lit dans `schedule.timeZone`, à défaut dans `scheduler.timeZone` de la
+configuration (ou `--tz`), à défaut en UTC. Laissée en UTC sur une machine en France,
+une fenêtre `08:00`–`10:00` part avec une à deux heures de retard.
+
+`snoopit run <workflow>` réenregistre le job à partir du workflow mais **conserve**
+son planning et son état activé/désactivé.
 
 Le moment exact dans la fenêtre est jitté de façon déterministe à partir de l'id du
 job et de la période : stable (un job ne dérive pas), et différent d'un job à l'autre.
@@ -254,9 +328,15 @@ fait dans son propre script, délibérément.
 
 ### Blocage : on s'arrête
 
-Si le site oppose un CAPTCHA, un 403 ou une limitation explicite, le recovery lève
-`BlockedError` **sans consulter le modèle**. Le run se termine `completed` avec
-`stopReason: blocked:<raison>` — un constat rapporté, pas un échec à retenter.
+Si le site oppose un CAPTCHA, un 403 ou une limitation explicite, `ctx.visit` — ou le
+recovery, pour un challenge apparu plus tard — lève `BlockedError` **sans consulter
+le modèle**. Le run se termine `completed` avec `stopReason: blocked:<raison>` — un
+constat rapporté, pas un échec à retenter. `snoopit run` sort alors avec le code 3,
+comme pour `auth-required`.
+
+Sur une page en succès (2xx), seuls les widgets de challenge comptent : un article
+qui parle de « captcha » n'est pas un challenge. Le texte n'est lu que sur une page
+déjà en erreur.
 
 Aucun contournement n'est à écrire, et aucun ne sera accepté en revue.
 
@@ -276,8 +356,8 @@ Aucun contournement n'est à écrire, et aucun ne sera accepté en revue.
 4. **Fermez vos pages.** `await page.close()`, y compris en cas d'erreur (`finally`).
 5. **Une ressource illisible n'arrête pas la collecte.** `ctx.frontier.fail(entry, …)`
    et on continue ; le run reste vert, le problème apparaît dans le rapport.
-6. **Face à un blocage, arrêtez.** Le runtime le détecte et le rapporte
-   (cf. §5) ; ne le contournez pas.
+6. **Face à un blocage, arrêtez.** Le runtime le détecte dès `ctx.visit` et le
+   rapporte (cf. §5) ; ne le contournez pas.
 7. **Ne forcez jamais un appel LLM là où une heuristique suffit.** Déclarez
    `maxLlmCalls: 0` quand le workflow doit s'en passer : cela documente l'intention
    *et* la fait respecter.

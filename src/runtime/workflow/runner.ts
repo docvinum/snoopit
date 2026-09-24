@@ -11,6 +11,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { posix } from 'node:path';
 import type { BrowserBackend } from '../browser/types.js';
+import { PageTracker } from '../browser/tracking.js';
 import { RunEventEmitter } from '../events/emitter.js';
 import { runDir } from '../downloads/paths.js';
 import { buildReport } from '../../outputs/report.js';
@@ -18,6 +19,7 @@ import type { Store } from '../../state/store.js';
 import type { Job, Run, RunBudget, RunEvent, RunTrigger } from '../../state/types.js';
 import { BudgetExceededError, BudgetGuard } from '../budget/guard.js';
 import { BlockedError } from '../recovery/blocking.js';
+import { AuthRequiredError } from '../navigation/session.js';
 import type { LlmProvider } from '../recovery/llm/provider.js';
 import { isoFromNow } from '../../util/time.js';
 import { RunContext } from './context.js';
@@ -64,6 +66,8 @@ export interface RunOutcome {
   readonly budgetLimit: string | null;
   /** Set when the site refused us. The run stopped on purpose. */
   readonly blocked: BlockedError | null;
+  /** Set when a page that needs a session hit a login wall. A person must log in. */
+  readonly authRequired: AuthRequiredError | null;
   /** Frontier entries returned to the queue from previously crashed runs. */
   readonly reclaimed: number;
 }
@@ -135,11 +139,14 @@ export async function runWorkflow<T>(
   }
 
   const guard = new BudgetGuard(budget);
+  // Every page the workflow opens goes through the tracker, so the ones it leaves
+  // open — usually because it threw before its `finally` — are closed below.
+  const pages = new PageTracker(options.browser);
   const context = new RunContext({
     store,
     job,
     run,
-    browser: options.browser,
+    browser: pages,
     events,
     dataDir,
     budget: guard,
@@ -151,6 +158,7 @@ export async function runWorkflow<T>(
   let failure: Error | null = null;
   let budgetLimit: string | null = null;
   let blocked: BlockedError | null = null;
+  let authRequired: AuthRequiredError | null = null;
 
   try {
     result = await definition.run(context);
@@ -176,12 +184,26 @@ export async function runWorkflow<T>(
         message: error.message,
         data: { reason: error.signal.reason, evidence: error.signal.evidence },
       });
+    } else if (error instanceof AuthRequiredError) {
+      // The session in the Chrome profile has expired. Retrying cannot fix that and
+      // logging in automatically is not something snoopit does: stop and say so.
+      authRequired = error;
+      events.emit({
+        type: 'AUTH_REQUIRED',
+        level: 'error',
+        url: error.url,
+        message: error.message,
+        data: { finalUrl: error.finalUrl, evidence: error.evidence },
+      });
     } else {
       failure = error instanceof Error ? error : new Error(String(error));
     }
   } finally {
     clearInterval(heartbeat);
   }
+
+  // The Chrome is persistent: a tab left open here would still be open next week.
+  const leakedPages = await pages.closeAll();
 
   // Work claimed but not finished goes back to the queue immediately, rather than
   // waiting out a lease that no one is holding any more.
@@ -196,16 +218,19 @@ export async function runWorkflow<T>(
       message:
         blocked !== null
           ? `Run arrêté : le site refuse l'accès (${blocked.signal.reason})`
-          : budgetLimit === null
-            ? 'Run terminé'
-            : `Run terminé (budget ${budgetLimit})`,
+          : authRequired !== null
+            ? 'Run arrêté : session expirée, reconnexion manuelle requise'
+            : budgetLimit === null
+              ? 'Run terminé'
+              : `Run terminé (budget ${budgetLimit})`,
+      ...(leakedPages === 0 ? {} : { data: { leakedPages } }),
     });
   } else {
     events.emit({
       type: 'RUN_FAILED',
       level: 'error',
       message: failure.message,
-      data: { stack: failure.stack ?? null },
+      data: { stack: failure.stack ?? null, leakedPages },
     });
   }
 
@@ -217,9 +242,11 @@ export async function runWorkflow<T>(
           ? 'error'
           : blocked !== null
             ? `blocked:${blocked.signal.reason}`
-            : budgetLimit === null
-              ? 'done'
-              : `budget:${budgetLimit}`,
+            : authRequired !== null
+              ? 'auth-required'
+              : budgetLimit === null
+                ? 'done'
+                : `budget:${budgetLimit}`,
       error: failure === null ? null : failure.message,
       reportPath: posix.join(runDirectory, 'report.md'),
     }) ?? run;
@@ -252,6 +279,7 @@ export async function runWorkflow<T>(
     error: failure,
     budgetLimit,
     blocked,
+    authRequired,
     reclaimed,
   };
 }

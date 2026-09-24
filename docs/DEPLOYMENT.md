@@ -126,6 +126,24 @@ Chaque run laisse une trace complète :
 `events.jsonl` est écrit **au fil de l'eau** : même un run tué laisse une trace
 lisible de sa progression.
 
+**Fuseau horaire des planifications.** Les fenêtres (`08:00`–`10:00`) se lisent dans
+le `timeZone` du planning du job, à défaut dans `scheduler.timeZone` de
+`/etc/snoopit/snoopit.config.yaml`, à défaut en **UTC** — pas dans le fuseau de la
+machine. Sur un serveur en France :
+
+```yaml
+scheduler:
+  timeZone: Europe/Paris
+```
+
+`snoopit due` affiche la décision obtenue ; c'est la vérification à faire après tout
+changement.
+
+**Codes de sortie de `snoopit run`** : `0` terminé (arrêt sur budget compris), `1`
+échec, `3` arrêt volontaire qui demande une action humaine — site qui refuse l'accès
+(`blocked:*`) ou session expirée (`auth-required`, se reconnecter dans le profil
+Chrome, §4). Un `tick` continue avec les jobs suivants quand l'un d'eux échoue.
+
 ---
 
 ## 6. Diagnostic

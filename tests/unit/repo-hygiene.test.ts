@@ -84,4 +84,15 @@ describe('repository hygiene', () => {
       `Unanchored patterns match at any depth and can swallow a source directory: ${unanchored.join(', ')}`,
     ).toEqual([]);
   });
+
+  it('points the npm `snoopit` script at the same entry point as `bin`', () => {
+    // tsc emits `src/cli/main.ts` to `dist/src/cli/main.js`; a script pointing at
+    // `dist/cli/main.js` builds, then fails with a module-not-found error.
+    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+      bin: Record<string, string>;
+      scripts: Record<string, string>;
+    };
+    const entry = pkg.bin['snoopit']!.replace(/^\.\//, '');
+    expect(pkg.scripts['snoopit']).toContain(`node ${entry}`);
+  });
 });

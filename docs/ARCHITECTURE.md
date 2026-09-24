@@ -143,8 +143,11 @@ espoir. Le budget `max_llm_calls` par défaut est bas (3).
 ### D7 — Blocage ⇒ arrêt
 
 Face à un CAPTCHA, un 403 systématique ou une limitation explicite : `STOP` +
-journalisation + rapport. Aucun mécanisme de contournement n'est conçu ni accepté en
-contribution. Les profils réseau servent des besoins légitimes (tests géographiques,
+journalisation + rapport. La détection a lieu dès `ctx.visit` (statut 403/429,
+widgets de challenge) puis dans le recovery ; un workflow n'a rien à écrire pour
+s'arrêter. Une session expirée (mur de connexion là où un workflow a déclaré une page
+réservée aux connectés) arrête le run de la même façon, en `auth-required`. Aucun
+mécanisme de contournement n'est conçu ni accepté en contribution. Les profils réseau servent des besoins légitimes (tests géographiques,
 routage, résilience), pas l'évasion.
 
 ---
@@ -198,6 +201,8 @@ crawl_pages    ce que nous savons d'une URL, à travers tous les runs
 crawl_frontier ce qu'il reste à faire, avec priorité et tentatives
 artifacts      ce que nous avons produit, relié à sa page source
 events         ce qui s'est passé, structuré et interrogeable
+items          ce que nous suivons par l'identifiant du site (annonce, produit)
+item_changes   l'historique de chaque item : apparition, changement, disparition, retour
 ```
 
 `crawl_pages` — le cœur mémoire, conforme à §7 de la spec :
@@ -301,7 +306,8 @@ atomiques** (message assistant + ses résultats d'outils), jamais message par me
 Un `events.jsonl` par run, plus une table `events` interrogeable. Types conformes à
 §17 de la spec : `RUN_STARTED`, `PAGE_DISCOVERED`, `PAGE_VISITED`, `CONTENT_CHANGED`,
 `ARTIFACT_CREATED`, `HTTP_ERROR`, `RECOVERY_STARTED/SUCCEEDED/FAILED`,
-`BUDGET_REACHED`, `RUN_COMPLETED`, `RUN_FAILED`.
+`BUDGET_REACHED`, `BLOCKED`, `AUTH_REQUIRED`, `ITEM_NEW/CHANGED/GONE/RETURNED`,
+`RUN_COMPLETED`, `RUN_FAILED`.
 
 Chaque run produit **un rapport lisible par un humain** (`report.md`) *et* **un rapport
 exploitable par une machine** (`report.json`). Les journaux texte complètent, ils ne
@@ -381,6 +387,12 @@ content_hash
 status
 source_url
 ```
+
+Pour ce que le site identifie lui-même (un id d'annonce), `ctx.items` tient cette
+mémoire champ par champ : `observe(kind, key, champs)` dit `new` / `changed` /
+`returned` / `unchanged` avec le diff, `markMissing(kind)` marque les disparus, et
+`item_changes` garde l'historique — une série de prix est une requête. Voir
+[`WORKFLOWS.md`](WORKFLOWS.md) §3.
 
 Le système aval peut ensuite exploiter cette information pour produire des usages métier, par exemple :
 

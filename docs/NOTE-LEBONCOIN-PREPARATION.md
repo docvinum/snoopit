@@ -32,7 +32,12 @@
 schéma v1, absence de runs périmés, workflows d'exemple détectés. Pas de clé LLM →
 recovery limité à L0/L1 (accepté : le chemin nominal ne fait aucun appel).
 
-Arguments notables du service Chrome :
+> **Depuis** : le service ne tourne plus en `--headless=new` mais sous Xvfb — en
+> headless, leboncoin répond 403 (DataDome). Configuration en vigueur :
+> [`EXEMPLE-LEBONCOIN.md`](EXEMPLE-LEBONCOIN.md) §1.3 et
+> `deploy/systemd/snoopit-chrome.service`. Ce qui suit est l'état du 2026-09-03.
+
+Arguments notables du service Chrome (à cette date) :
 
 ```text
 --headless=new
@@ -103,7 +108,9 @@ sudo -u snoopit env DISPLAY=:99 google-chrome-stable \
   https://www.leboncoin.fr/account/searches
 ```
 
-Résultat : session leboncoin active, recherches enregistrées accessibles. La
+Résultat : session leboncoin active, recherches enregistrées accessibles.
+(L'URL retenue ensuite pour le workflow est `/my-searches`, constatée dans le Chrome
+sous Xvfb — cf. [`EXEMPLE-LEBONCOIN.md`](EXEMPLE-LEBONCOIN.md) §1.3.) La
 portabilité est acquise **pour ce profil**, pas démontrée en général.
 
 ---

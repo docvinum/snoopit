@@ -339,6 +339,10 @@ class CdpPage implements PageHandle {
   async close(): Promise<void> {
     await this.page.close();
   }
+
+  isClosed(): boolean {
+    return this.page.isClosed();
+  }
 }
 
 export class CdpBackend implements BrowserBackend {

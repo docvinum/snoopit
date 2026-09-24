@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidTimeZone } from '../util/time.js';
 
 /**
  * Configuration schema.
@@ -11,6 +12,9 @@ import { z } from 'zod';
 
 const durationPattern = /^\d+(\.\d+)?(ms|s|m|h|d)(\d+(\.\d+)?(ms|s|m|h|d))*$/;
 const clockPattern = /^([01]?\d|2[0-3]):[0-5]\d$/;
+const timeZone = z
+  .string()
+  .refine(isValidTimeZone, { message: 'expected an IANA time zone, e.g. "Europe/Paris"' });
 
 export const budgetSchema = z
   .object({
@@ -37,6 +41,8 @@ export const scheduleSchema = z
       .strict()
       .refine((value) => value.min <= value.max, { message: 'min must be <= max' })
       .optional(),
+    /** Zone the window is read in. Falls back to `scheduler.timeZone`. */
+    timeZone: timeZone.optional(),
   })
   .strict();
 
@@ -99,6 +105,18 @@ export const configSchema = z
           .string()
           .regex(durationPattern, 'expected a duration like "75s"')
           .default('75s'),
+      })
+      .strict()
+      .default({}),
+
+    scheduler: z
+      .object({
+        /**
+         * Zone in which schedule windows are read when a job does not name its own.
+         * A window of `08:00`–`10:00` means local time to whoever wrote it; left at
+         * UTC on a machine in France it silently fires one or two hours late.
+         */
+        timeZone: timeZone.default('UTC'),
       })
       .strict()
       .default({}),

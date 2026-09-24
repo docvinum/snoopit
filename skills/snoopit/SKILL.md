@@ -107,7 +107,20 @@ await page.close();          // TOUJOURS, y compris en erreur (finally)
 
 `navigation` porte `status`, `redirectChain`, `ok`.
 `changed` est vrai si le contenu diffère de la visite précédente — **c'est le signal
-de veille**.
+de veille**. `offSite` est vrai si la navigation a fini sur un autre site : la page
+est alors enregistrée en erreur, pas comme visitée.
+
+Un 403, un 429 ou un widget de challenge (DataDome compris) **arrête le run dès
+`visit`** (`blocked:<raison>`) — rien à écrire de votre côté.
+
+Page réservée aux connectés ? Déclarez-le, et une session expirée arrête le run en
+`auth-required` au lieu d'enregistrer la page de connexion :
+
+```ts
+await ctx.visit('https://www.leboncoin.fr/my-searches', {
+  session: { expectHost: 'www.leboncoin.fr' },   // + loginSelector si le mur est rendu sur place
+});
+```
 
 ### Découvrir
 
@@ -129,7 +142,25 @@ ctx.frontier.complete(entry);      // ou ctx.frontier.fail(entry, message)
 ```
 
 Télécharge via la session de la page (mêmes cookies), hash le contenu, enregistre la
-provenance. `deduplicated` est vrai si ces octets exacts existaient déjà.
+provenance. `deduplicated` est vrai si le job détenait déjà ces octets exacts, à cette
+URL ou à une autre : rien n'est écrit. Un contenu modifié à la même URL est écrit à
+côté de l'ancien, jamais par-dessus.
+
+### Suivre des éléments (annonces, produits…)
+
+```ts
+const { status, diff } = ctx.items.observe('annonce:velos', ad.id, {
+  titre: ad.titre,
+  prix: ad.prix,            // nombre, pas « 250 € »
+  url: ad.url,
+});
+// status : 'new' | 'changed' | 'returned' | 'unchanged'  ;  diff : { prix: { from, to } }
+ctx.items.markMissing('annonce:velos');   // SEULEMENT si toute la liste a été lue
+```
+
+Identité : la clé du site (id d'annonce), pas l'URL. État et historique en SQLite —
+**ne comparez jamais avec le JSON du run précédent**. `ctx.items.history(kind, key)`
+donne l'historique (prix compris).
 
 ### Extraire
 
@@ -217,8 +248,10 @@ trouverait jamais rien.
    détecte et arrête proprement. **N'écrivez aucun contournement** — ni rotation
    d'identité, ni résolution de challenge, ni dissimulation. Ce sera refusé en revue.
 7. **Ne dépendez pas d'un numéro de page.** L'identité est l'URL canonique.
-8. **Ne vous connectez pas depuis une heuristique.** Si un workflow doit
-   s'authentifier, il le fait dans son propre script, délibérément.
+8. **Ne vous connectez pas depuis une heuristique.** Le recovery ne clique jamais
+   « Se connecter ». La session vit dans le profil Chrome, posée par une personne ;
+   déclarez-la avec `visit(url, { session })` pour qu'une expiration arrête le run
+   en `auth-required`. Un workflow ne contient jamais d'identifiant.
 
 ---
 
@@ -241,6 +274,7 @@ La planification est déclarée sur le job, pas dans le workflow :
 schedule:
   frequency: daily              # manual | hourly | daily | weekly
   window: { from: "08:00", to: "10:00" }
+  timeZone: Europe/Paris        # sinon scheduler.timeZone, sinon UTC
   pagesPerRun: { min: 10, max: 100 }
 ```
 

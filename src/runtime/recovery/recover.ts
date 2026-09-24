@@ -27,7 +27,12 @@
  * a model to get past a challenge is the behaviour this project refuses (spec §12).
  */
 
-import { BlockedError, detectBlocking, BLOCKING_PROBE_SELECTORS } from './blocking.js';
+import {
+  BlockedError,
+  detectBlocking,
+  BLOCKING_PROBE_SELECTORS,
+  type BlockSignal,
+} from './blocking.js';
 import { collectControls, dismissOverlays, type DismissCandidate } from './heuristics.js';
 import { isHumanInteractable } from '../browser/interactable.js';
 import type { ElementSnapshot, PageHandle } from '../browser/types.js';
@@ -101,19 +106,39 @@ async function expectedStateReached(page: PageHandle, expected: ExpectedState): 
   return element !== null && isHumanInteractable(element.view).interactable;
 }
 
-/** Stops everything when the site has told us to stop. */
-async function assertNotBlocked(page: PageHandle): Promise<void> {
+/**
+ * Looks at a page for signs that the site is refusing us.
+ *
+ * One combined query first: on the nominal path — no challenge on the page — that
+ * is a single round trip instead of one per known widget. Only when something
+ * matches are the selectors probed one by one, to name the evidence.
+ *
+ * `text: false` skips the wording checks, which are the weakest evidence: an
+ * article that mentions "rate limit" is not a rate limit. `visit` only reads the
+ * text of pages that already answered with an error status.
+ */
+export async function probeBlocking(
+  page: PageHandle,
+  options: { readonly text?: boolean } = {},
+): Promise<BlockSignal | null> {
   const present: string[] = [];
-  for (const selector of BLOCKING_PROBE_SELECTORS) {
-    if ((await page.query(selector)) !== null) present.push(selector);
+  if ((await page.query(BLOCKING_PROBE_SELECTORS.join(', '))) !== null) {
+    for (const selector of BLOCKING_PROBE_SELECTORS) {
+      if ((await page.query(selector)) !== null) present.push(selector);
+    }
   }
 
-  const signal = detectBlocking({
+  return detectBlocking({
     url: page.url(),
     status: page.status(),
-    text: (await page.text()).slice(0, 4000),
+    text: options.text === false ? '' : (await page.text()).slice(0, 4000),
     selectorsPresent: present,
   });
+}
+
+/** Stops everything when the site has told us to stop. */
+async function assertNotBlocked(page: PageHandle): Promise<void> {
+  const signal = await probeBlocking(page);
   if (signal !== null) throw new BlockedError(page.url(), signal);
 }
 
