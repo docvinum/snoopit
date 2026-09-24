@@ -218,7 +218,8 @@ const { page } = await ctx.visit(url, { revisitAfter: '7d' });
 ```
 
 Au début : une visite rafraîchit `next_visit_after`, donc vérifier après ne
-trouverait jamais rien.
+trouverait jamais rien. Travail atteint par un clic plutôt que par `visit` :
+`ctx.frontier.complete(entry, { revisitAfter: '20h' })` (idem pour `fail`).
 
 > **Piège classique.** `ctx.frontier.take()` ne rend que ce qui est *en file*. Une
 > entrée déjà `complete()` n'y revient qu'à son échéance de revisite. Un workflow de

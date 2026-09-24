@@ -50,8 +50,10 @@ const CAPTCHA_SELECTORS: readonly string[] = [
   '#challenge-form',
   '[data-cf-challenge]',
   '.cf-turnstile',
-  // DataDome's interstitial, served by leboncoin among others.
+  // DataDome, served by leboncoin among others: the challenge frame once rendered,
+  // and the script of its bare interstitial ("Please enable JS…") before it is.
   'iframe[src*="captcha-delivery.com"]',
+  'script[src*="captcha-delivery.com"]',
 ];
 
 /** Phrases that name a challenge, in the languages our fixtures and targets use. */

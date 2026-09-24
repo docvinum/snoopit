@@ -44,6 +44,7 @@ import type {
   CollectResult,
   DiscoverOptions,
   ItemObservation,
+  RevisitOption,
   VisitOptions,
   VisitResult,
   WorkflowContext,
@@ -300,6 +301,27 @@ export class RunContext implements WorkflowContext {
     }
   }
 
+  /**
+   * Sets when a frontier entry comes back into the queue.
+   *
+   * Revisits are driven by `crawl_pages.next_visit_after`, which `visit` sets for
+   * the pages it loads. Work reached by a click never goes through `visit`, so the
+   * date is set here — on the page row `discover` created for the entry.
+   */
+  private scheduleRevisit(entry: FrontierEntry, options: RevisitOption): void {
+    if (options.revisitAfter === undefined) return;
+    this.store.pages.discover({
+      jobId: this.job.id,
+      url: entry.url,
+      canonicalUrl: entry.canonicalUrl,
+    });
+    this.store.pages.scheduleRevisit(
+      this.job.id,
+      entry.canonicalUrl,
+      isoFromNow(parseDuration(options.revisitAfter)),
+    );
+  }
+
   readonly frontier = {
     discover: (url: string, options: DiscoverOptions = {}): boolean => {
       const canonicalUrl = this.canonical(url);
@@ -343,12 +365,14 @@ export class RunContext implements WorkflowContext {
       return entries;
     },
 
-    complete: (entry: FrontierEntry): void => {
+    complete: (entry: FrontierEntry, options: RevisitOption = {}): void => {
       this.store.frontier.complete(this.job.id, entry.canonicalUrl);
+      this.scheduleRevisit(entry, options);
     },
 
-    fail: (entry: FrontierEntry, error: string): void => {
+    fail: (entry: FrontierEntry, error: string, options: RevisitOption = {}): void => {
       this.store.frontier.fail(this.job.id, entry.canonicalUrl, error);
+      this.scheduleRevisit(entry, options);
       this.store.runs.increment(this.run.id, 'errorCount');
       this.budget.recordError();
     },

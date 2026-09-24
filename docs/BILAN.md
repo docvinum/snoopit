@@ -379,6 +379,12 @@ Ajouts : **`ctx.items`** (suivi par identifiant du site, avec diff et historique
 SQLite — tables `items` et `item_changes`, migration 2) et la **garde de session**
 (`visit(url, { session })`, arrêt `auth-required`, code de sortie 3).
 
+Puis le premier workflow réel, `leboncoin-recherches` : 47 recherches enregistrées,
+revues par clic depuis `/my-searches`, annonces suivies par `ctx.items`,
+disparitions détectées quand la liste est complète. Il a demandé une primitive :
+`ctx.frontier.complete/fail(entry, { revisitAfter })`, pour que le travail atteint
+sans `visit` revienne en file.
+
 Reste connu : `defaultBudget`, `browser.navigationTimeout` et les profils de
 navigateur sont validés par la configuration mais pas encore appliqués ; une entrée
 de frontier en échec n'est pas retentée automatiquement.

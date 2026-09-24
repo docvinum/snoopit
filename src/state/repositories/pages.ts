@@ -182,6 +182,13 @@ export class PageRepository {
     return this.get(input.jobId, input.canonicalUrl)!;
   }
 
+  /** Sets when a page becomes due for a revisit. Leaves everything else as it was. */
+  scheduleRevisit(jobId: string, canonicalUrl: string, nextVisitAfter: string): void {
+    this.db
+      .prepare('UPDATE crawl_pages SET next_visit_after = ? WHERE job_id = ? AND canonical_url = ?')
+      .run(nextVisitAfter, jobId, canonicalUrl);
+  }
+
   /** Marks a page as no longer reachable (404/410 on a URL we used to know). */
   markGone(jobId: string, canonicalUrl: string, httpStatus?: number | null): Page | null {
     this.db
