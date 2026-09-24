@@ -23,7 +23,8 @@ import {
   type ExtractSpec,
   type FieldMap,
 } from '../extraction/spec.js';
-import { isHumanInteractable, type ElementView } from './interactable.js';
+import { isHumanInteractable } from './interactable.js';
+import { extractRecords, measureElement } from './page-functions.js';
 import {
   DEFAULT_TIMEOUT_MS,
   ElementNotFoundError,
@@ -47,52 +48,6 @@ export interface CdpBackendOptions {
   readonly cdpUrl: string;
   readonly defaultTimeoutMs?: number;
   readonly viewport?: readonly [number, number];
-}
-
-/**
- * Gathers an `ElementView` inside the page.
- *
- * Serialised as a function passed to `evaluate`, so it runs in the page's own
- * context where `getComputedStyle` and layout boxes exist. The *decision* stays in
- * `isHumanInteractable` on our side, shared with the fake backend — only the
- * measurement happens here.
- */
-function measureElement(element: Element): ElementView {
-  const style = window.getComputedStyle(element);
-  const rect = element.getBoundingClientRect();
-
-  const closestMatching = (selector: string): boolean => element.closest(selector) !== null;
-
-  // Reachable = intersects the viewport, or lives inside something scrollable that
-  // could bring it into view. Content below the fold is ordinary interface.
-  const inViewport =
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth;
-
-  let scrollable = false;
-  let node: Element | null = element.parentElement;
-  while (node !== null && !scrollable) {
-    const nodeStyle = window.getComputedStyle(node);
-    if (/(auto|scroll)/.test(nodeStyle.overflowY + nodeStyle.overflowX)) scrollable = true;
-    node = node.parentElement;
-  }
-  const documentScrolls = document.documentElement.scrollHeight > window.innerHeight;
-
-  return {
-    width: rect.width,
-    height: rect.height,
-    display: style.display,
-    visibility: style.visibility,
-    opacity: Number(style.opacity),
-    pointerEvents: style.pointerEvents,
-    ariaHidden: closestMatching('[aria-hidden="true"]'),
-    inert: closestMatching('[inert]'),
-    hidden: closestMatching('[hidden]'),
-    disabled: (element as HTMLInputElement).disabled === true,
-    reachable: inViewport || scrollable || documentScrolls,
-  };
 }
 
 function isTimeout(error: unknown): boolean {
@@ -230,37 +185,12 @@ class CdpPage implements PageHandle {
       attribute: field.attribute,
     }));
 
-    const raw = await this.page.evaluate(
-      ({ itemSelector, fieldSpecs }) =>
-        Array.from(document.querySelectorAll(itemSelector)).map((item) => {
-          const record: Record<string, string | null> = {};
-          for (const field of fieldSpecs) {
-            const target = field.selector === null ? item : item.querySelector(field.selector);
-            if (target === null) {
-              record[field.name] = null;
-              continue;
-            }
-            if (field.attribute === 'text') {
-              record[field.name] = target.textContent ?? '';
-            } else if (field.attribute === 'html') {
-              record[field.name] = target.innerHTML;
-            } else if (field.attribute === 'href' || field.attribute === 'src') {
-              // Resolved by the browser itself, which is authoritative about the
-              // document's base URL (including any <base> tag).
-              const property = field.attribute === 'href' ? 'href' : 'src';
-              const resolved = (target as unknown as Record<string, unknown>)[property];
-              record[field.name] =
-                typeof resolved === 'string' && resolved !== ''
-                  ? resolved
-                  : target.getAttribute(field.attribute);
-            } else {
-              record[field.name] = target.getAttribute(field.attribute);
-            }
-          }
-          return record;
-        }),
-      { itemSelector: spec.selector, fieldSpecs: fields },
-    );
+    // Measured and extracted by the same page-side code the extension backend
+    // injects, so every real-browser backend reads a page identically.
+    const raw = await this.page.evaluate(extractRecords, {
+      itemSelector: spec.selector,
+      fieldSpecs: fields,
+    });
 
     const textFields = new Set(fields.filter((f) => f.attribute === 'text').map((f) => f.name));
     return raw.map((record) => {

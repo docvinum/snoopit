@@ -95,4 +95,29 @@ describe('repository hygiene', () => {
     const entry = pkg.bin['snoopit']!.replace(/^\.\//, '');
     expect(pkg.scripts['snoopit']).toContain(`node ${entry}`);
   });
+
+  it('keeps playwright-core inside the CDP adapter', () => {
+    // AGENTS.md boundary 2. Tests may launch a browser; the runtime may not.
+    const offenders = listFiles('src').filter(
+      (file) =>
+        file.endsWith('.ts') &&
+        file !== 'src/runtime/browser/cdp.ts' &&
+        /from ['"]playwright-core['"]/.test(readFileSync(join(REPO_ROOT, file), 'utf8')),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps the files the extension embeds free of runtime imports', () => {
+    // scripts/build-extension.mjs copies them into the extension as they are, and
+    // injects page-functions.js into pages as a classic script.
+    for (const file of [
+      'src/runtime/browser/page-functions.ts',
+      'src/runtime/browser/extension/protocol.ts',
+    ]) {
+      const imports = readFileSync(join(REPO_ROOT, file), 'utf8')
+        .split('\n')
+        .filter((line) => /^import\s/.test(line) && !/^import type\s/.test(line));
+      expect(imports, file).toEqual([]);
+    }
+  });
 });

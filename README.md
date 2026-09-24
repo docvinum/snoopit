@@ -79,7 +79,9 @@ node dist/src/cli/main.js tick               # lance chaque job dû une fois
 node dist/src/cli/main.js doctor             # ce déploiement est-il sain ?
 ```
 
-Déploiement sur un serveur : [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Déploiement sur un serveur : [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Deux moteurs :
+un Chrome sous Xvfb piloté en CDP, ou un Chrome **visible**, sans port de débogage,
+piloté par l'extension snoopit (`browser.backend: extension`, §9).
 
 Vérification complète (format, lint, typecheck, tests) :
 

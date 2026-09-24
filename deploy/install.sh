@@ -41,8 +41,14 @@ CHROME_BIN="$(command -v google-chrome-stable || command -v google-chrome || com
 say "Using Chrome at $CHROME_BIN"
 
 XVFB_RUN_BIN="$(command -v xvfb-run || true)"
-[[ -n "$XVFB_RUN_BIN" ]] || { echo "xvfb-run is required for the persistent Chrome display" >&2; exit 1; }
-say "Using Xvfb at $XVFB_RUN_BIN"
+if [[ -n "$XVFB_RUN_BIN" ]]; then
+  say "Using Xvfb at $XVFB_RUN_BIN"
+else
+  # Only the CDP backend's headless-display Chrome needs it; the extension backend
+  # uses a Chrome in a desktop session.
+  echo "warning: xvfb-run not found — snoopit-chrome.service (CDP backend) will not start" >&2
+  XVFB_RUN_BIN="/usr/bin/xvfb-run"
+fi
 
 # ── Service user and directories ─────────────────────────────────────────────
 if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
@@ -87,7 +93,7 @@ fi
 
 if [[ ! -f "$CONFIG_DIR/snoopit.env" ]]; then
   say "Writing empty secrets file"
-  printf '# Secrets for snoopit. Readable only by the service user.\n#SNOOPIT_LLM_API_KEY=\n' \
+  printf '# Secrets for snoopit. Readable only by the service user.\n#SNOOPIT_LLM_API_KEY=\n#SNOOPIT_EXTENSION_TOKEN=\n' \
     > "$CONFIG_DIR/snoopit.env"
   chown root:"$SERVICE_USER" "$CONFIG_DIR/snoopit.env"
   chmod 0640 "$CONFIG_DIR/snoopit.env"
@@ -109,8 +115,16 @@ say "Applying database migrations"
 sudo -u "$SERVICE_USER" node "$PREFIX/dist/src/cli/main.js" migrate --config "$CONFIG_DIR/snoopit.config.yaml"
 
 say "Starting services"
-systemctl enable snoopit-chrome.service
-systemctl restart snoopit-chrome.service
+if grep -Eq '^[[:space:]]*backend:[[:space:]]*extension' "$CONFIG_DIR/snoopit.config.yaml"; then
+  # The browser is the dedicated Chrome of a desktop session, driven by the
+  # extension; the headless-display Chrome would only hold a second profile.
+  say "browser.backend is extension: snoopit-chrome.service left disabled"
+  systemctl disable --now snoopit-chrome.service 2>/dev/null || true
+  say "Extension to load in the dedicated Chrome: $PREFIX/dist/extension"
+else
+  systemctl enable snoopit-chrome.service
+  systemctl restart snoopit-chrome.service
+fi
 systemctl enable --now snoopit-tick.timer
 
 say "Done. Check with:"

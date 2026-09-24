@@ -14,6 +14,15 @@ browser:
   # Loopback only. Never bind this to 0.0.0.0 — it grants full control of a browser
   # that carries authenticated sessions.
   cdpUrl: http://127.0.0.1:9222
+  # cdp: attach to a Chrome over its debugging port (snoopit-chrome.service).
+  # extension: drive a visible Chrome through snoopit's extension, no debugging
+  # port (docs/DEPLOYMENT.md §9). The pairing token is read from the variable named
+  # by tokenEnv — never written here.
+  backend: cdp
+  extension:
+    port: 9333
+    tokenEnv: SNOOPIT_EXTENSION_TOKEN
+    connectTimeout: 45s
   defaultProfile: desktop-chrome
   navigationTimeout: 30s
 

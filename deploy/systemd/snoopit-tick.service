@@ -7,8 +7,11 @@
 
 [Unit]
 Description=snoopit — run due jobs
+# Ordering only, not a dependency: with `browser.backend: extension` the browser is
+# the dedicated Chrome of a desktop session, not snoopit-chrome.service, and a tick
+# must not start the headless one. A tick that finds no browser fails that run and
+# says why; the next tick tries again.
 After=snoopit-chrome.service
-Requires=snoopit-chrome.service
 
 [Service]
 Type=oneshot

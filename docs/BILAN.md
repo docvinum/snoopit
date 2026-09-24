@@ -389,9 +389,20 @@ sans `visit` revienne en file.
 workflow : jusque-là, un workflow sans budget tournait sans aucune limite malgré la
 configuration.
 
-Reste connu : `browser.navigationTimeout` et les profils de navigateur sont validés
-par la configuration mais pas encore appliqués ; une entrée de frontier en échec
-n'est retentée que si le workflow le demande (`fail(entry, …, { revisitAfter })`).
+Puis un **second moteur, par extension Chrome** (`browser.backend: extension`) :
+un Chrome visible dans la session de bureau de dell, sans port de débogage, piloté
+par l'extension snoopit via un WebSocket loopback à appairage HMAC mutuel. Même code
+de page que CDP (`page-functions.ts`), même suite de conformité, passée dans un
+Chromium réel avec l'extension chargée ; test de bout en bout du CLI par ce moteur.
+Deux défauts trouvés en chemin : `chrome.scripting` ne transmet pas les `null`
+imbriqués dans les arguments, et renvoie un résultat vide (pas une erreur) quand la
+page navigue pendant l'appel. Au passage, `browser.navigationTimeout` est désormais
+appliqué aux deux moteurs.
+
+Reste connu : les profils de navigateur sont validés par la configuration mais pas
+appliqués ; une entrée de frontier en échec n'est retentée que si le workflow le
+demande (`fail(entry, …, { revisitAfter })`) ; le moteur extension capture la partie
+visible d'une page, pas la page entière.
 
 ---
 

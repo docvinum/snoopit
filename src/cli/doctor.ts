@@ -12,6 +12,7 @@
 import { existsSync } from 'node:fs';
 import type { LoadedConfig } from '../config/load.js';
 import { llmApiKey } from '../config/load.js';
+import { MIN_TOKEN_LENGTH } from '../runtime/browser/extension/handshake.js';
 import { MIGRATIONS } from '../state/migrations.js';
 import { Store } from '../state/store.js';
 import { listWorkflows } from '../runtime/workflow/load.js';
@@ -152,17 +153,49 @@ function checkLlm(loaded: LoadedConfig, env: NodeJS.ProcessEnv): Check {
       };
 }
 
+/**
+ * The extension backend has no Chrome to probe from here: the extension connects
+ * only while a run holds the endpoint open. What can be checked is the pairing
+ * token, without which no run can start.
+ */
+function checkExtension(loaded: LoadedConfig, env: NodeJS.ProcessEnv): Check {
+  const { tokenEnv, port } = loaded.config.browser.extension;
+  const token = env[tokenEnv];
+  if (token === undefined || token === '') {
+    return {
+      name: 'extension',
+      status: 'fail',
+      detail: `${tokenEnv} is not set`,
+      remedy: `openssl rand -hex 32, then set it in ${tokenEnv} and in the extension options`,
+    };
+  }
+  if (token.length < MIN_TOKEN_LENGTH) {
+    return {
+      name: 'extension',
+      status: 'fail',
+      detail: `${tokenEnv} is shorter than ${String(MIN_TOKEN_LENGTH)} characters`,
+      remedy: 'openssl rand -hex 32',
+    };
+  }
+  return {
+    name: 'extension',
+    status: 'ok',
+    detail: `token set; runs wait for the extension on 127.0.0.1:${String(port)}`,
+  };
+}
+
 export async function runDoctor(
   loaded: LoadedConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<Check[]> {
-  return [
-    checkCdpBinding(loaded.config.browser.cdpUrl),
-    await checkChrome(loaded.config.browser.cdpUrl),
-    ...checkDatabase(loaded.paths),
-    checkWorkflows(),
-    checkLlm(loaded, env),
-  ];
+  const browser =
+    loaded.config.browser.backend === 'extension'
+      ? [checkExtension(loaded, env)]
+      : [
+          checkCdpBinding(loaded.config.browser.cdpUrl),
+          await checkChrome(loaded.config.browser.cdpUrl),
+        ];
+  return [...browser, ...checkDatabase(loaded.paths), checkWorkflows(), checkLlm(loaded, env)];
 }
 
 export function formatChecks(checks: readonly Check[]): string {

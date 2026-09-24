@@ -71,7 +71,8 @@ exécute.
 1. **Seuls les repositories parlent SQL.** Aucun `db.prepare()` hors de
    `src/state/repositories/`.
 2. **Seul `src/runtime/browser/cdp.ts` importe `playwright-core`.** Aucun workflow,
-   aucune règle métier ne construit une commande CDP.
+   aucune règle métier ne construit une commande CDP. Le code qui s'exécute *dans la
+   page* vit dans `page-functions.ts`, partagé par les moteurs CDP et extension.
 3. **Aucun secret dans un objet de configuration.** La clé LLM est désignée par le
    *nom* d'une variable d'environnement.
 4. **Le LLM n'est pas dans le chemin nominal.** Un run normal fait zéro appel. Si
@@ -115,5 +116,11 @@ Un test nomme le comportement attendu, pas la fonction appelée.
   échoue si cela recommence — n'y touchez pas sans lire son en-tête.
 - **La lib TypeScript `DOM` est activée** (playwright-core l'exige), mais une règle
   ESLint interdit `window`/`document` hors des adaptateurs navigateur.
+- **L'extension (`extension/`) embarque deux fichiers de `src/`** tels quels :
+  `page-functions.ts` et `extension/protocol.ts`. Aucun import à l'exécution dans
+  ces deux fichiers (`tests/unit/repo-hygiene.test.ts` le vérifie). `npm run build`
+  assemble l'extension dans `dist/extension/`.
+- **Les tests « navigateur réel » se sautent sans le dire** si Chromium manque :
+  lisez les lignes `[conformance] … exercised` avant de conclure qu'un moteur passe.
 - **Les pages sont indexées par URL canonique.** `store.pages.get(jobId, url)`
   attend l'URL canonique, pas l'URL brute.

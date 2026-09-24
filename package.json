@@ -1,7 +1,7 @@
 {
   "name": "snoopit",
   "version": "0.1.0",
-  "description": "Orchestrateur de visites web persistantes utilisant Chrome comme moteur d'ex\u00e9cution",
+  "description": "Orchestrateur de visites web persistantes utilisant Chrome comme moteur d'exécution",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -11,8 +11,8 @@
     "snoopit": "./dist/src/cli/main.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json && npm run build:extension --silent",
+    "typecheck": "tsc --noEmit && tsc -p extension/tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -20,19 +20,23 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
-    "snoopit": "npm run build --silent && node dist/src/cli/main.js"
+    "snoopit": "npm run build --silent && node dist/src/cli/main.js",
+    "build:extension": "tsc -p extension/tsconfig.json && node scripts/build-extension.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
     "linkedom": "^0.18.13",
     "playwright-core": "^1.62.1",
+    "ws": "^8.21.3",
     "yaml": "^2.7.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/chrome": "^0.3.0",
     "@types/node": "^22.10.7",
+    "@types/ws": "^8.18.1",
     "eslint": "^9.18.0",
     "prettier": "^3.4.2",
     "typescript": "^5.7.3",

@@ -7,7 +7,7 @@
  */
 import { pathToFileURL } from 'node:url';
 import { loadConfig } from '../config/load.js';
-import { CdpBackend } from '../runtime/browser/cdp.js';
+import { connectBrowser } from '../runtime/browser/connect.js';
 import { listWorkflows, loadWorkflow } from '../runtime/workflow/load.js';
 import { runWorkflow } from '../runtime/workflow/runner.js';
 import { dueJobs, evaluateJobs } from '../scheduler/scheduler.js';
@@ -163,7 +163,7 @@ async function cmdRun(
       ...(definition.budget === undefined ? {} : { budget: definition.budget }),
     });
 
-    const browser = await CdpBackend.connect({ cdpUrl: loaded.config.browser.cdpUrl });
+    const browser = await connectBrowser(loaded.config);
     const { provider, reason } = providerFromConfig(loaded.config);
     if (reason !== null) console.error(`[llm] ${reason}`);
 
@@ -241,7 +241,7 @@ async function cmdTick(
     const { failures } = await runDueJobs(due, {
       store,
       loadWorkflow: (name) => loadWorkflow(name),
-      connect: () => CdpBackend.connect({ cdpUrl: loaded.config.browser.cdpUrl }),
+      connect: () => connectBrowser(loaded.config),
       runOptions: {
         llm: provider,
         dataDir: loaded.paths.dataDir,

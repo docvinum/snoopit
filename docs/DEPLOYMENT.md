@@ -20,6 +20,10 @@ systemd
   data/                     base SQLite, artifacts, rapports
 ```
 
+Avec `browser.backend: extension`, le navigateur est un Chrome visible de la session
+de bureau, piloté par l'extension snoopit, et `snoopit-chrome.service` est désactivé :
+voir §9.
+
 **Chrome tourne en permanence ; le scheduler non.** Le scheduler ne conserve aucun
 état entre deux passages — ce qui est dû se déduit de la base et de l'horloge — donc
 un processus qui démarre, travaille et sort n'a rien à perdre quand on le tue, et
@@ -195,3 +199,99 @@ sudo ./deploy/install.sh
 Les migrations sont appliquées par le script. Elles sont **immuables une fois
 appliquées** : si une migration déjà passée a changé, le démarrage échoue plutôt que
 de dériver en silence.
+
+---
+
+## 9. Moteur extension : un Chrome visible, sans port de débogage
+
+`browser.backend: extension` remplace le Chrome sous Xvfb piloté en CDP par un
+**Chrome dédié, affiché dans la session de bureau de dell**, que snoopit pilote par
+son extension. Aucun port de débogage n'est ouvert ; on voit les visites se faire,
+et on se connecte aux sites à la main, dans ce même Chrome.
+
+```text
+session de bureau (utilisateur de dell)
+  Chrome snoopit              profil ~/.config/snoopit-chrome, extension snoopit
+    └─ WebSocket ────────────► 127.0.0.1:9333, ouvert par snoopit le temps d'un run
+systemd
+  snoopit-tick.timer          inchangé : planning, frontier, SQLite, rapports
+  snoopit-chrome.service      désactivé (utile seulement au moteur CDP)
+```
+
+Le reste ne change pas : mêmes workflows, même base, mêmes rapports. Le moteur CDP
+reste disponible — `browser.backend: cdp` — et les deux passent la même suite de
+conformité.
+
+### 9.1 Mise en place
+
+1. **Jeton d'appairage**, sur dell :
+
+   ```bash
+   openssl rand -hex 32        # à copier
+   sudoedit /etc/snoopit/snoopit.env
+   #   SNOOPIT_EXTENSION_TOKEN=<le jeton>
+   ```
+
+2. **Configuration** — `/etc/snoopit/snoopit.config.yaml` :
+
+   ```yaml
+   browser:
+     backend: extension
+     extension:
+       port: 9333            # défaut
+       connectTimeout: 45s   # défaut ; l'extension réessaie au moins toutes les 30 s
+   ```
+
+3. **Installer** : `sudo ./deploy/install.sh`. Il laisse `snoopit-chrome.service`
+   désactivé et affiche le chemin de l'extension (`/opt/snoopit/dist/extension`).
+
+4. **Le Chrome dédié**, dans la session de l'utilisateur de dell :
+
+   ```bash
+   cp deploy/desktop/snoopit-chrome.desktop ~/.config/autostart/
+   cp deploy/desktop/snoopit-chrome.desktop ~/.local/share/applications/
+   ```
+
+   Puis le lancer (menu « Chrome snoopit », ou au prochain login). Il a son propre
+   profil, séparé du Chrome de tous les jours.
+
+5. **Charger l'extension**, une fois, dans ce Chrome : `chrome://extensions` →
+   *Mode développeur* → *Charger l'extension non empaquetée* →
+   `/opt/snoopit/dist/extension`. (Chrome ne permet plus de la charger par option de
+   ligne de commande.)
+
+6. **Appairer** : l'icône snoopit ouvre la page d'options ; y coller le jeton,
+   *Enregistrer*. Le statut passe à « connectée à snoopit » au prochain run.
+
+7. **Se connecter aux sites** (leboncoin…) dans ce Chrome, à la main. La session
+   vit dans `~/.config/snoopit-chrome` ; snoopit ne se connecte jamais tout seul.
+
+8. **Vérifier** :
+
+   ```bash
+   sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js doctor --config /etc/snoopit/snoopit.config.yaml
+   sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js run leboncoin-recherches --config /etc/snoopit/snoopit.config.yaml
+   ```
+
+   `doctor` vérifie le jeton ; le run ouvre une fenêtre dans le Chrome snoopit, y
+   fait ses visites, puis la laisse vide.
+
+### 9.2 Ce qu'il faut savoir
+
+- **Chrome doit être ouvert**, et la session de bureau active : sans extension
+  connectée, un run échoue au bout de `connectTimeout` avec « No snoopit extension
+  connected… » et le tick suivant réessaie. Désactiver la mise en veille de dell.
+  L'écran peut être verrouillé.
+- **Les visites se font dans une fenêtre à part**, ouverte par l'extension ; ses
+  onglets sont les seuls qu'elle touche. Fermer un de ces onglets pendant un run le
+  fait échouer proprement.
+- **Sécurité.** Le port 9333 n'écoute que sur `127.0.0.1`, et seulement pendant un
+  run. L'appairage est une preuve HMAC **mutuelle** : ni snoopit ni l'extension
+  n'envoient le jeton, et l'extension n'obéit à rien qui ne le prouve pas. Changer
+  de jeton = le changer aux deux endroits.
+- **Différences avec CDP**, sans effet sur les workflows : les clics sont des clics
+  DOM (après le même contrôle d'interactabilité) ; une capture d'écran couvre la
+  partie visible de la page, pas la page entière ; le cache HTTP est contourné par
+  revalidation des pages (comme un rechargement) plutôt que désactivé.
+- **Revenir au moteur CDP** : `backend: cdp`, puis
+  `sudo systemctl enable --now snoopit-chrome.service`.

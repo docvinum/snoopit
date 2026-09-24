@@ -87,6 +87,18 @@ téléchargements, arbre d'accessibilité) *et* le profil persistant.
 
 Le paquet `playwright-core` n'embarque aucun binaire : nous utilisons le Chrome système.
 
+**Révision : un second moteur, par extension** (`browser.backend: extension`). Le
+besoin est apparu avec leboncoin : naviguer dans un Chrome **visible**, où l'on se
+connecte à la main, sans port de débogage. L'extension ne remplace pas le runtime :
+elle en est un moteur. snoopit ouvre un WebSocket sur `127.0.0.1` le temps d'un run ;
+l'extension s'y connecte, les deux côtés prouvent qu'ils détiennent le jeton
+d'appairage (HMAC mutuel, jeton jamais transmis), puis l'extension exécute les
+opérations du port, **uniquement dans les onglets qu'elle a ouverts**. Le code
+exécuté dans la page est le même pour les deux moteurs
+(`src/runtime/browser/page-functions.ts`) ; la même suite de conformité les valide.
+Planning, frontier, SQLite, budgets et rapports ne bougent pas. Déploiement :
+`docs/DEPLOYMENT.md` §9.
+
 ### D3 — La couche CDP est isolée derrière un port
 
 La spec proscrit la « dépendance métier directe à Chrome CDP » (§22). Aucun workflow,
@@ -117,9 +129,11 @@ export interface PageHandle {
 }
 ```
 
-Trois adaptateurs sont prévus : `CdpBackend` (production), `FakeBackend` (tests, sans
-navigateur), et éventuellement `ExtensionBackend` (si un pilotage de poste de travail
-devenait nécessaire — hors MVP).
+Trois adaptateurs : `CdpBackend` (Chrome sous Xvfb, en CDP), `ExtensionBackend`
+(Chrome visible, par l'extension snoopit, sans port de débogage — voir D2) et
+`FakeBackend` (tests, sans navigateur). Le port réel a évolué depuis cette esquisse
+(instantanés plutôt que poignées, pas d'échappatoire CDP) : `src/runtime/browser/types.ts`
+fait foi.
 
 Bénéfice immédiat : la majorité de la suite de tests s'exécute **sans navigateur**.
 

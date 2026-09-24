@@ -55,6 +55,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The extension backend is exercised in a Chromium launched with the built
+      # extension. Branded Chrome no longer accepts --load-extension; Playwright's
+      # Chromium does. Without it that half of the suite would skip.
+      - name: Install Chromium for the extension backend
+        run: npx playwright-core install --with-deps chromium
+
       - name: Start a persistent Chrome with CDP on loopback
         run: |
           google-chrome \
