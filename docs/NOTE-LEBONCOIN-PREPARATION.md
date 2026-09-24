@@ -180,6 +180,10 @@ matinale) — pas de cron système.
 
 ## 8. Prochaine étape
 
+> **Fait le 2026-09-24** : exploration à partir des pages sauvegardées sur le Chrome
+> connecté, workflow livré (`workflows/leboncoin-recherches.ts`). Constats et choix :
+> [`EXEMPLE-LEBONCOIN.md`](EXEMPLE-LEBONCOIN.md) §1.3 et en-tête.
+
 Exploration live du site par le coding agent, attaché au Chrome persistant via CDP,
 sans toucher à `src/`. À identifier :
 

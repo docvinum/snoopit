@@ -239,6 +239,17 @@ const requeued = ctx.frontier.enqueueDueRevisits(); // au DÉBUT du run
 Appelez `enqueueDueRevisits()` **avant** de visiter quoi que ce soit : une visite
 rafraîchit `next_visit_after`, donc vérifier après ne trouverait jamais rien.
 
+Une entrée traitée **sans** `ctx.visit` — atteinte par un clic, ou un document
+collecté — prend l'échéance au moment où on la clôt :
+
+```ts
+ctx.frontier.complete(entry, { revisitAfter: '20h' });           // revue demain
+ctx.frontier.fail(entry, 'illisible', { revisitAfter: '20h' });  // retentée demain
+```
+
+Sans cette option, une entrée `complete()` reste faite pour toujours, et un `fail()`
+reste en échec.
+
 ### Planification
 
 Déclarée sur le job, pas dans le workflow :

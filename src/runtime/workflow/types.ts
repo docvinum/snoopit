@@ -73,6 +73,11 @@ export interface VisitResult {
   readonly offSite: boolean;
 }
 
+export interface RevisitOption {
+  /** When the entry is worth working again, as a duration (`20h`, `7d`). */
+  readonly revisitAfter?: string;
+}
+
 export interface DiscoverOptions {
   readonly kind?: FrontierEntry['kind'];
   /** Lower runs sooner. Defaults to 100. */
@@ -136,8 +141,15 @@ export interface WorkflowContext {
     discoverAll(urls: readonly string[], options?: DiscoverOptions): number;
     /** Claims the next batch of work for this run. */
     take(limit: number): FrontierEntry[];
-    complete(entry: FrontierEntry): void;
-    fail(entry: FrontierEntry, error: string): void;
+    /**
+     * Marks an entry done. With `revisitAfter` (`20h`, `7d`), the entry comes back
+     * through `enqueueDueRevisits()` once that time has passed — what `visit`'s own
+     * `revisitAfter` does for pages it loads, for work reached any other way (a
+     * click, a download).
+     */
+    complete(entry: FrontierEntry, options?: RevisitOption): void;
+    /** Marks an entry failed. With `revisitAfter`, it is retried after that delay. */
+    fail(entry: FrontierEntry, error: string, options?: RevisitOption): void;
     remaining(): number;
     /**
      * Re-queues known pages whose `revisitAfter` has come due.

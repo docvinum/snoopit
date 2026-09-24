@@ -5,6 +5,14 @@
 > le workflow. La livraison attendue reste **un seul fichier dans `workflows/`**,
 > aucune modification du runtime.
 
+> **Livré** : [`workflows/leboncoin-recherches.ts`](../workflows/leboncoin-recherches.ts),
+> testé sur des fixtures anonymisées (`tests/fixtures/leboncoin/`). Il s'écarte du
+> prompt du §2 sur trois points, décidés après lecture des vraies pages (§1.3) : il
+> **clique** sur chaque recherche depuis `/my-searches` au lieu de charger ses
+> résultats, il revoit les recherches **par lots** au fil de la journée (§1.6), et il
+> détecte les **disparitions** quand une page montre toute la liste. Il a demandé une
+> primitive runtime : `ctx.frontier.complete(entry, { revisitAfter })`.
+
 Cas d'usage de référence : « suivi d'annonces » (`docs/USE_CASES.md`). La cible
 demande une **session authentifiée** *et* un Chrome avec rendu réel (Xvfb) : avec
 `--headless=new` le site ne se charge pas.
@@ -100,6 +108,31 @@ bouton « Continuer sans accepter » ou `#didomi-agree-to-all`.
 Liste d'annonces : `article` contenant `[data-qa-id="aditem_container"]`, lien
 `a[href^="/ad/"]` (titre, prix, localisation dans des `<p>` / `<span>` de la carte).
 
+Structure relevée le 2026-09-24 sur le Chrome connecté (pages sauvegardées, puis
+anonymisées en fixtures) :
+
+- **`/my-searches`** : une carte par recherche, `article[aria-labelledby="name-<uuid>"]`.
+  Le lien `a[title="Voir les résultats de recherche"]` couvre la carte ; il porte
+  `saved_id_view=<uuid>` — l'identifiant stable de la recherche — et `sa=<date>`, qui
+  change. Nom : `p[id^="name-"]` ; critères : le premier `p` sans attribut ; lieux :
+  `p[aria-label]`.
+- **Résultats** : barre `nav[aria-label="Filtrer les résultats de recherche"]` ;
+  compteur dans un `h2` masqué « Résultats de recherche : 13 annonces ». Le prix,
+  la ville et le terrain n'ont **aucun marqueur stable** ; ils sont lus dans les
+  phrases d'accessibilité de la carte : « Prix: 339 000 €. », « Située à … »,
+  « Surface du terrain N mètres carrés », « Baisse de prix ». Vendeur pro :
+  `[data-qa-id="pro-store-name"]`, date relative dans l'`aria-label` du lien
+  `/boutique/…` (« publiée mardi dernier à 12:22 »).
+- Une annonce **remontée** apparaît deux fois : en tête sous une forme réduite
+  (sans photos ni vendeur), puis à son rang.
+- `__NEXT_DATA__` ne contient pas les annonces quand on arrive aux résultats par un
+  clic (navigation côté client) : il reste celui de `/my-searches`.
+- **Un chargement direct** d'une URL de résultats (`view-source:`) a reçu
+  l'interstitiel DataDome (« Please enable JS and disable any ad blocker »,
+  `ct.captcha-delivery.com/i.js`) alors que le clic depuis `/my-searches` passait.
+  D'où la navigation par clic — le parcours normal de l'interface ; un challenge,
+  s'il vient quand même, arrête le run.
+
 Le workflow **assume** la session (aucun identifiant dans le code ni la config) et la
 déclare : `ctx.visit(url, { session: { expectHost: 'www.leboncoin.fr' } })`. Une
 redirection vers `auth.leboncoin.fr` arrête alors le run en `auth-required`
@@ -125,9 +158,14 @@ de la page bouge ; le chemin nominal reste à zéro appel.
 reprend pas tant qu'on ne lui en donne pas un. Il n'y a pas encore de commande
 dédiée ; on l'écrit en base après le premier run :
 
+Pour `leboncoin-recherches` (47 recherches au relevé) : un run par heure entre 8 h
+et 20 h, 4 à 5 recherches par run. Douze passages de quelques pages plutôt qu'un
+seul de cinquante ; chaque recherche revient en file 20 h après sa revue, donc une
+revue par jour environ.
+
 ```bash
 sudo -u snoopit sqlite3 /var/lib/snoopit/data/snoopit.db "UPDATE jobs SET schedule_json =
-  '{"frequency":"daily","window":{"from":"07:00","to":"09:00"},"timeZone":"Europe/Paris"}'
+  '{"frequency":"hourly","window":{"from":"08:00","to":"20:00"},"timeZone":"Europe/Paris","pagesPerRun":{"min":4,"max":5}}'
   WHERE id = 'leboncoin-recherches';"
 node dist/src/cli/main.js due     # doit expliquer quand le job partira
 ```
@@ -144,6 +182,9 @@ Nouveau fichier `workflows/*.ts` → `npm run check`, `npm run build`, puis
 ---
 
 ## 2. Prompt pour le coding agent
+
+Le brief initial, conservé tel quel. Le workflow livré en diffère sur les points
+signalés en tête de document.
 
 ```text
 Contexte : le dépôt snoopit est déployé sur cette machine (Chrome persistant en CDP
@@ -235,8 +276,22 @@ contre le Chrome persistant. Montre-moi report.md et recherches.md.
   (pages, frontier).
 - Si le run s'arrête en `auth-required` (événement `AUTH_REQUIRED`, code de sortie
   3), la session a expiré — refaire l'étape 1.2.
-- Historique d'une annonce (apparition, prix, disparition) : tables `items` et
-  `item_changes`, ou `ctx.items.history(kind, id)` depuis un workflow.
+- Chaque run écrit `recherches.md` (nouvelles 🆕, modifiées ✏️, disparues ❌, par
+  recherche) et `recherches.json` dans son dossier d'artifacts.
+- Historique des prix d'une annonce :
+
+  ```bash
+  sudo -u snoopit sqlite3 /var/lib/snoopit/data/snoopit.db "
+    SELECT c.at, c.change, json_extract(c.diff_json, '$.prix.to')
+      FROM item_changes c JOIN items i ON i.id = c.item_id
+     WHERE i.kind = 'annonce' AND i.key = '<id annonce>' ORDER BY c.id;"
+  ```
+
+  Une annonce est suivie une fois (`kind: 'annonce'`, clé = id leboncoin), quelles
+  que soient les recherches où elle figure ; sa présence dans chaque recherche l'est
+  sous `recherche:<uuid>`, ce qui porte les disparitions.
+- Une recherche supprimée du compte passe en échec (« recherche absente de
+  /my-searches ») et n'est plus revue.
 - Si chaque visite tombe sur un interstitiel DataDome (User-Agent `HeadlessChrome`
   dans `/json/version`), le Chrome tourne encore en `--headless=new` — reprendre
   l'étape 1.3.
