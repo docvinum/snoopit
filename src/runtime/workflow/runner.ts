@@ -17,7 +17,12 @@ import { runDir } from '../downloads/paths.js';
 import { buildReport } from '../../outputs/report.js';
 import type { Store } from '../../state/store.js';
 import type { Job, Run, RunBudget, RunEvent, RunTrigger } from '../../state/types.js';
-import { BudgetExceededError, BudgetGuard } from '../budget/guard.js';
+import {
+  BudgetExceededError,
+  BudgetGuard,
+  effectiveBudget,
+  type LooseBudget,
+} from '../budget/guard.js';
 import { BlockedError } from '../recovery/blocking.js';
 import { AuthRequiredError } from '../navigation/session.js';
 import type { LlmProvider } from '../recovery/llm/provider.js';
@@ -32,7 +37,13 @@ export interface RunWorkflowOptions {
   /** Absolute path of the data directory. */
   readonly dataDir: string;
   readonly trigger?: RunTrigger;
+  /** Overrides the workflow's and the job's budget for this run. */
   readonly budget?: RunBudget | null;
+  /**
+   * Limits applied to whatever the run's budget leaves unset — `defaultBudget` in
+   * the config. A workflow without a budget gets all of them.
+   */
+  readonly defaultBudget?: LooseBudget | null;
   /** Heartbeat interval. A `running` row with a stale heartbeat is a crashed run. */
   readonly heartbeatMs?: number;
   /**
@@ -81,7 +92,10 @@ export async function runWorkflow<T>(
   options: RunWorkflowOptions,
 ): Promise<RunOutcome> {
   const { store, job, dataDir } = options;
-  const budget = options.budget ?? definition.budget ?? job.budget ?? null;
+  const budget = effectiveBudget(
+    options.budget ?? definition.budget ?? job.budget ?? null,
+    options.defaultBudget,
+  );
 
   const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
   const staleCutoff = isoFromNow(-staleAfterMs);

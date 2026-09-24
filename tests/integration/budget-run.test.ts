@@ -69,6 +69,55 @@ async function run(definition: ReturnType<typeof walker>, budget: RunBudget) {
   });
 }
 
+describe('the configured default budget', () => {
+  const runWithDefaults = (definition: ReturnType<typeof workflow>, defaultBudget: RunBudget) =>
+    runWorkflow(definition, {
+      store,
+      job,
+      browser: backend(),
+      dataDir,
+      defaultBudget,
+      onLine: () => undefined,
+    });
+
+  it('bounds a workflow that declares no budget at all', async () => {
+    const outcome = await runWithDefaults(walker(20), { maxPages: 2, maxDuration: '20m' });
+
+    expect(outcome.run.stopReason).toBe('budget:max_pages');
+    expect(outcome.run.counters.pagesVisited).toBe(2);
+    // The limits in force are the ones recorded, so the report can explain the stop.
+    expect(outcome.run.budget).toEqual({ maxPages: 2, maxDuration: '20m' });
+  });
+
+  it('gives way to a limit the workflow names, and fills in the others', async () => {
+    const bounded = workflow({ ...walker(20), budget: { maxPages: 3 } });
+    const outcome = await runWithDefaults(bounded, { maxPages: 100, maxErrors: 1 });
+
+    expect(outcome.run.stopReason).toBe('budget:max_pages');
+    expect(outcome.run.counters.pagesVisited).toBe(3);
+    expect(outcome.run.budget).toEqual({ maxPages: 3, maxErrors: 1 });
+  });
+
+  it('applies an inherited limit the workflow did not think to name', async () => {
+    const failing = workflow({
+      name: 'failing',
+      budget: { maxPages: 50 },
+      async run(ctx) {
+        for (let i = 0; i < 10; i += 1) {
+          const { page } = await ctx.visit(server.url('/server-error'));
+          await page.close();
+        }
+        return {};
+      },
+    });
+
+    const outcome = await runWithDefaults(failing, { maxErrors: 2 });
+
+    expect(outcome.run.stopReason).toBe('budget:max_errors');
+    expect(outcome.run.counters.errorCount).toBe(2);
+  });
+});
+
 describe('budget enforcement', () => {
   it('stops cleanly at maxPages, as a completed run', async () => {
     const outcome = await run(walker(20), { maxPages: 3 });

@@ -174,6 +174,7 @@ async function cmdRun(
         browser,
         llm: provider,
         dataDir: loaded.paths.dataDir,
+        defaultBudget: loaded.config.defaultBudget,
         trigger: 'manual',
         heartbeatMs: parseDuration(loaded.config.runs.heartbeatInterval),
         staleAfterMs: parseDuration(loaded.config.runs.staleAfter),
@@ -244,6 +245,7 @@ async function cmdTick(
       runOptions: {
         llm: provider,
         dataDir: loaded.paths.dataDir,
+        defaultBudget: loaded.config.defaultBudget,
         heartbeatMs: parseDuration(loaded.config.runs.heartbeatInterval),
         staleAfterMs: parseDuration(loaded.config.runs.staleAfter),
       },

@@ -31,7 +31,9 @@ scheduler:
   # Left at UTC, a 08:00-10:00 window on a machine in France fires 1-2 hours late.
   timeZone: UTC
 
-# Applied to any workflow that does not declare its own budget.
+# Limits applied to every run, limit by limit, wherever the workflow's own budget
+# is silent: a workflow declaring only `maxPages` still gets the duration, error and
+# LLM limits below. A limit the workflow names always wins.
 defaultBudget:
   maxPages: 100
   maxDuration: 20m

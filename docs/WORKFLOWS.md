@@ -206,6 +206,13 @@ Un workflow déclare son budget ; le runtime l'applique.
 budget: { maxPages: 50, maxDuration: '20m', maxDownloadBytes: 500_000_000, maxLlmCalls: 0 }
 ```
 
+Les limites que le workflow ne nomme pas viennent de `defaultBudget` dans la
+configuration (défaut : 100 pages, 20 min, 3 appels LLM, 10 erreurs), **limite par
+limite** : `{ maxPages: 12 }` garde la durée, les erreurs et les appels LLM par
+défaut. Une limite nommée par le workflow l'emporte toujours ; un workflow sans
+budget reçoit toutes les limites par défaut. Le rapport montre le budget
+effectivement appliqué.
+
 `maxPages` compte les **unités de travail** : une visite de page et un document
 collecté valent chacun 1. Compter seulement les visites HTML laisserait un workflow
 de collecte pratiquement sans borne.

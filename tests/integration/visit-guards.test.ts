@@ -111,6 +111,19 @@ describe('a site refusing us, met on a plain visit', () => {
     expect(reachedAfterVisit()).toBe(true);
   });
 
+  it('records a plain-text 500 as an error and carries on', async () => {
+    serve(`${SITE}/boom`, { status: 500, body: 'boom', headers: { 'content-type': 'text/plain' } });
+    const { definition, reachedAfterVisit } = visitor(`${SITE}/boom`);
+
+    const outcome = await run(definition);
+
+    expect(outcome.run.stopReason).toBe('done');
+    expect(reachedAfterVisit()).toBe(true);
+    expect(store.pages.get(job.id, canonicalizeUrlOrThrow(`${SITE}/boom`))?.lastError).toBe(
+      'HTTP 500',
+    );
+  });
+
   it('still records a 404 as a gone page and carries on', async () => {
     const { definition, reachedAfterVisit } = visitor(`${SITE}/missing`);
     const outcome = await run(definition);
