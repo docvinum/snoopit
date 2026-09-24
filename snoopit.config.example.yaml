@@ -26,6 +26,11 @@ llm:
   model: anthropic/claude-sonnet-4.6
   apiKeyEnv: SNOOPIT_LLM_API_KEY
 
+scheduler:
+  # Zone schedule windows are read in, for jobs whose schedule names none.
+  # Left at UTC, a 08:00-10:00 window on a machine in France fires 1-2 hours late.
+  timeZone: UTC
+
 # Applied to any workflow that does not declare its own budget.
 defaultBudget:
   maxPages: 100

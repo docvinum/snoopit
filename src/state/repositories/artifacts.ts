@@ -116,6 +116,15 @@ export class ArtifactRepository {
     ).map(toArtifact);
   }
 
+  /** Artifacts of a job recorded at this data-dir-relative path, oldest first. */
+  findByPath(jobId: string, path: string): Artifact[] {
+    return (
+      this.db
+        .prepare('SELECT * FROM artifacts WHERE job_id = ? AND path = ? ORDER BY id')
+        .all(jobId, path) as ArtifactRow[]
+    ).map(toArtifact);
+  }
+
   totalBytes(runId: string): number {
     const row = this.db
       .prepare('SELECT COALESCE(SUM(bytes), 0) AS total FROM artifacts WHERE run_id = ?')

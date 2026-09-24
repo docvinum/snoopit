@@ -76,6 +76,21 @@ browser:
     expect(() => loadConfig({ cwd: dir, env: EMPTY_ENV })).toThrow(/maxDuration/);
   });
 
+  it('reads schedule windows in UTC unless told otherwise', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'snoopit-empty-'));
+    expect(loadConfig({ cwd: dir, env: EMPTY_ENV }).config.scheduler.timeZone).toBe('UTC');
+
+    const paris = withConfigFile('scheduler:\n  timeZone: Europe/Paris\n');
+    expect(loadConfig({ cwd: paris, env: EMPTY_ENV }).config.scheduler.timeZone).toBe(
+      'Europe/Paris',
+    );
+  });
+
+  it('rejects a time zone the platform does not know', () => {
+    const dir = withConfigFile('scheduler:\n  timeZone: Europe/Pariss\n');
+    expect(() => loadConfig({ cwd: dir, env: EMPTY_ENV })).toThrow(/scheduler\.timeZone/);
+  });
+
   it('rejects a config file that is not a mapping', () => {
     const dir = withConfigFile('- a\n- b\n');
     expect(() => loadConfig({ cwd: dir, env: EMPTY_ENV })).toThrow(/mapping/);

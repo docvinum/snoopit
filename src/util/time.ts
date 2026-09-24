@@ -62,6 +62,16 @@ export function parseDuration(input: string): number {
   return total;
 }
 
+/** True when `zone` is an IANA time zone this runtime knows, e.g. `Europe/Paris`. */
+export function isValidTimeZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Parses a `HH:MM` clock time into minutes since midnight.
  * Used by scheduler windows (`from: "08:00"`).

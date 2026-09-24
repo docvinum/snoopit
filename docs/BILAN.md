@@ -358,6 +358,33 @@ trouvé des défauts sont ceux qui **empruntaient un chemin nouveau**.
 
 ---
 
+## Après le MVP — corrections d'audit et suivi d'annonces
+
+Un audit du dépôt a relevé des défauts qu'aucun test ne couvrait ; chacun est corrigé
+avec un test de non-régression.
+
+| Défaut | Correction |
+|---|---|
+| `snoopit run` effaçait le planning d'un job et réactivait un job désactivé | `jobs.upsert` conserve tout champ non fourni |
+| Un 403 / 429 / CAPTCHA sur un simple `visit` n'arrêtait pas le run | `visit` détecte le blocage (statut, widgets, DataDome) et arrête le run |
+| Un PDF modifié à la même URL écrasait l'ancien fichier, dont l'artefact gardait l'ancien hash | la nouvelle version est écrite à côté (`versionedPath`) |
+| La déduplication ne jouait qu'à chemin identique, et un contenu dédupliqué échappait au budget | déduplication par contenu, décidée avant toute écriture ; le transfert est toujours compté |
+| Fenêtres de planification lues en UTC quel que soit le pays | `schedule.timeZone`, `scheduler.timeZone` (config) |
+| Un workflow introuvable ou un Chrome injoignable interrompait tout le `tick` | `runDueJobs` isole chaque job |
+| Les onglets oubliés s'accumulaient dans le Chrome persistant | le runner ferme les pages restées ouvertes |
+| Une redirection vers la page de connexion était enregistrée comme contenu | `offSite`, et `visit(url, { session })` → `auth-required` |
+| Script npm `snoopit` et résolution de `workflows/` avec espaces | chemins corrigés |
+
+Ajouts : **`ctx.items`** (suivi par identifiant du site, avec diff et historique en
+SQLite — tables `items` et `item_changes`, migration 2) et la **garde de session**
+(`visit(url, { session })`, arrêt `auth-required`, code de sortie 3).
+
+Reste connu : `defaultBudget`, `browser.navigationTimeout` et les profils de
+navigateur sont validés par la configuration mais pas encore appliqués ; une entrée
+de frontier en échec n'est pas retentée automatiquement.
+
+---
+
 ## Ce qu'il ne faut pas défaire
 
 Cinq propriétés portent la valeur du système. Les perdre le ramènerait à ce que

@@ -70,6 +70,14 @@ describe('detectBlocking — refusals', () => {
     expect(detectBlocking({ ...base, status: 429 })?.reason).toBe('rate-limited');
   });
 
+  it('recognises the DataDome interstitial by its challenge frame', () => {
+    const signal = detectBlocking({
+      ...base,
+      selectorsPresent: ['iframe[src*="captcha-delivery.com"]'],
+    });
+    expect(signal?.reason).toBe('captcha');
+  });
+
   it('reports a 403 as forbidden', () => {
     expect(detectBlocking({ ...base, status: 403 })?.reason).toBe('http-forbidden');
   });

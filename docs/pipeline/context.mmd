@@ -8,13 +8,15 @@ flowchart TD
   subgraph VISIT["ctx.visit(url, opts) — context.ts:93"]
     v_budget["budget.assertOk('page') — le 11e visit ne démarre pas si maxPages=10"]
     v_canon["canonical() → navigation/canonical.ts:119 canonicalizeUrl()<br/>URL canonique = identité de page"]
-    v_open["browser.open(url) → browser/cdp.ts:384 (voir cdp.mmd)"]
-    v_wait["page.waitForReady({selector: opts.waitFor})"]
+    v_open["browser.open(url) via PageTracker (fermé en fin de run) → browser/cdp.ts (voir cdp.mmd)"]
+    v_access["assertAccess() — probeBlocking (403/429, widgets de challenge) ⇒ BlockedError<br/>opts.session ⇒ detectLoginWall (navigation/session.ts) ⇒ AuthRequiredError<br/>rien n'est enregistré avant ce contrôle"]
+    v_wait["page.waitForReady({selector: opts.waitFor}) — sur timeout, assertAccess() à nouveau"]
+    v_off["redirection hors site (siteHost ≠) ⇒ pages.recordError() · HTTP_ERROR warn · offSite: true"]
     v_err{"navigation.ok ?"}
     v_gone["404/410 ⇒ pages.discover() + pages.markGone()"]
     v_recerr["autre non-2xx ⇒ pages.recordError()<br/>runs.increment(errorCount) · budget.recordError()<br/>event HTTP_ERROR"]
     v_ok["pages.recordVisit({contentHash(page.text), title, nextVisitAfter})<br/>runs.increment(pagesVisited) · budget.recordPage()<br/>event PAGE_VISITED (+ CONTENT_CHANGED si changed)"]
-    v_ret["retourne { page, navigation, record, changed, firstVisit }"]
+    v_ret["retourne { page, navigation, record, changed, firstVisit, offSite }"]
   end
 
   subgraph FRONTIER["ctx.frontier.* — file de découverte"]
@@ -36,15 +38,22 @@ flowchart TD
 
   subgraph ART["ctx.artifacts.*"]
     a_budget["collect: budget.assertOk('page') + assertOk('download')"]
-    a_dl["downloadTo(page, url) → downloads/download.ts:61<br/>page.fetch (session de la page) → vérifie 2xx → contentHash → écrit"]
-    a_dedup["artifacts.findByHash(job, hash) — mêmes octets, même chemin ⇒ deduplicated"]
-    a_row["artifacts.create({pageId, sourceUrl, kind, path, bytes, contentHash})<br/>runs.increment(artifactsCreated, downloadedBytes)<br/>budget.recordBytes + recordPage · event ARTIFACT_CREATED"]
+    a_dl["fetchDownload(page, url) → downloads/download.ts<br/>page.fetch (session de la page) → vérifie 2xx → contentHash, rien d'écrit<br/>budget.recordBytes + recordPage · runs.increment(downloadedBytes)"]
+    a_dedup["artifacts.findByHash(job, hash) — mêmes octets, toute URL ⇒ deduplicated, rien d'écrit"]
+    a_row["chemin déjà pris par d'autres octets ⇒ versionedPath() · writeDownload()<br/>artifacts.create({pageId, sourceUrl, kind, path, bytes, contentHash})<br/>runs.increment(artifactsCreated) · event ARTIFACT_CREATED"]
     a_write["writeJson / writeMarkdown / screenshot ⇒ writeArtifactBytes()<br/>artifactPath(downloads/paths.ts:88) → writeFile → artifacts.create"]
   end
 
-  repos[("SQLite — state/repositories/*<br/>pages · frontier · runs · artifacts · events")]
+  subgraph ITEMS["ctx.items.* — suivi par identifiant du site"]
+    i_obs["observe(kind, key, champs) ⇒ items.observe() — diffFields (state/item-diff.ts)<br/>new | changed | returned | unchanged · item_changes · event ITEM_*"]
+    i_miss["markMissing(kind) ⇒ items.markMissing() — non vus par ce run ⇒ gone · event ITEM_GONE"]
+  end
 
-  v_budget --> v_canon --> v_open --> v_wait --> v_err
+  repos[("SQLite — state/repositories/*<br/>pages · frontier · runs · artifacts · events · items")]
+
+  v_budget --> v_canon --> v_open --> v_access --> v_wait --> v_off
+  v_off -->|hors site| v_ret
+  v_off -->|même site| v_err
   v_err -->|non| v_gone --> v_ret
   v_err -->|non| v_recerr --> v_ret
   v_err -->|oui| v_ok --> v_ret
@@ -64,3 +73,5 @@ flowchart TD
   f_rev --> repos
   e_call --> repos
   a_row --> repos
+  i_obs --> repos
+  i_miss --> repos

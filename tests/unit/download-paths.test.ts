@@ -4,7 +4,24 @@ import {
   filenameFromUrl,
   runDir,
   sanitizeDir,
+  versionedPath,
 } from '../../src/runtime/downloads/paths.js';
+
+describe('versionedPath', () => {
+  const hash = 'sha256:0123456789abcdef';
+
+  it('names a new version by its own content, before the extension', () => {
+    expect(versionedPath('jobs/j/artifacts/rapport-abc123.pdf', hash)).toBe(
+      'jobs/j/artifacts/rapport-abc123.01234567.pdf',
+    );
+  });
+
+  it('handles a path without extension', () => {
+    expect(versionedPath('jobs/j/artifacts/index-abc123', hash)).toBe(
+      'jobs/j/artifacts/index-abc123.01234567',
+    );
+  });
+});
 
 describe('filenameFromUrl', () => {
   it('takes the last path segment', () => {

@@ -413,6 +413,10 @@ class FakePage implements PageHandle {
     this.closed = true;
     return Promise.resolve();
   }
+
+  isClosed(): boolean {
+    return this.closed;
+  }
 }
 
 export class FakeBackend implements BrowserBackend {

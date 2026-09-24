@@ -2,8 +2,8 @@
 /**
  * snoopit CLI.
  *
- * Lot 1 ships the commands that operate on state alone — no browser is involved.
- * `run` and `schedule` arrive with Lots 3 and 4.
+ * `migrate`, `status`, `due` and `canon` work on state alone; `run` and `tick`
+ * attach to the persistent Chrome.
  */
 import { pathToFileURL } from 'node:url';
 import { loadConfig } from '../config/load.js';
@@ -11,6 +11,7 @@ import { CdpBackend } from '../runtime/browser/cdp.js';
 import { listWorkflows, loadWorkflow } from '../runtime/workflow/load.js';
 import { runWorkflow } from '../runtime/workflow/runner.js';
 import { dueJobs, evaluateJobs } from '../scheduler/scheduler.js';
+import { runDueJobs } from '../scheduler/tick.js';
 import { providerFromConfig } from '../runtime/recovery/llm/from-config.js';
 import { exitCodeFor, formatChecks, runDoctor } from './doctor.js';
 import { parseDuration } from '../util/time.js';
@@ -35,7 +36,11 @@ Usage:
 Options:
   --config <file>                Path to a config file (default: ./snoopit.config.yaml)
   --job <id>                     Job to attribute the run to (default: the workflow name)
-  --tz <zone>                    Time zone for schedule windows (default: UTC)
+  --tz <zone>                    Time zone for schedule windows of jobs that do not
+                                 name their own (default: scheduler.timeZone, else UTC)
+
+Exit status of \`run\`: 0 done (budget stops included), 1 failed, 3 stopped because the
+site refused access or the session expired (blocked:*, auth-required).
 `;
 
 interface ParsedArgs {
@@ -178,7 +183,11 @@ async function cmdRun(
       console.log(`run:      ${outcome.run.id} [${outcome.run.status}]`);
       console.log(`report:   ${outcome.reportPath}`);
       console.log(`json:     ${outcome.reportJsonPath}`);
-      return outcome.error === null ? 0 : 1;
+      if (outcome.error !== null) return 1;
+      // Stopped on purpose, but a person has to act: surfaced in the exit status so
+      // cron or systemd notices without anyone reading the report.
+      if (outcome.blocked !== null || outcome.authRequired !== null) return 3;
+      return 0;
     } finally {
       await browser.close();
     }
@@ -192,7 +201,9 @@ function cmdDue(configFile: string | undefined, timeZone: string | undefined): n
   const store = Store.open({ path: loaded.paths.databaseFile });
 
   try {
-    const decisions = evaluateJobs(store, timeZone === undefined ? {} : { timeZone });
+    const decisions = evaluateJobs(store, {
+      timeZone: timeZone ?? loaded.config.scheduler.timeZone,
+    });
     if (decisions.length === 0) {
       console.log('No enabled jobs.');
       return 0;
@@ -217,38 +228,28 @@ async function cmdTick(
   const store = Store.open({ path: loaded.paths.databaseFile });
 
   try {
-    const due = dueJobs(store, timeZone === undefined ? {} : { timeZone });
+    const due = dueJobs(store, { timeZone: timeZone ?? loaded.config.scheduler.timeZone });
     if (due.length === 0) {
       console.log('Nothing due.');
       return 0;
     }
 
-    let failures = 0;
-    for (const { job, pagesPerRun } of due) {
-      const definition = await loadWorkflow(job.workflow);
-      const browser = await CdpBackend.connect({ cdpUrl: loaded.config.browser.cdpUrl });
-      try {
-        const outcome = await runWorkflow(definition, {
-          store,
-          job,
-          browser,
-          llm: providerFromConfig(loaded.config).provider,
-          dataDir: loaded.paths.dataDir,
-          trigger: 'schedule',
-          pagesPerRun,
-          heartbeatMs: parseDuration(loaded.config.runs.heartbeatInterval),
-          staleAfterMs: parseDuration(loaded.config.runs.staleAfter),
-        });
-        console.log(`${job.id}: ${outcome.run.status} (${outcome.run.stopReason ?? '—'})`);
-        if (outcome.error !== null) failures += 1;
-      } catch (error) {
-        // One job failing must not stop the tick: the others are still due.
-        console.error(`${job.id}: ${error instanceof Error ? error.message : String(error)}`);
-        failures += 1;
-      } finally {
-        await browser.close();
-      }
-    }
+    const { provider, reason } = providerFromConfig(loaded.config);
+    if (reason !== null) console.error(`[llm] ${reason}`);
+
+    const { failures } = await runDueJobs(due, {
+      store,
+      loadWorkflow: (name) => loadWorkflow(name),
+      connect: () => CdpBackend.connect({ cdpUrl: loaded.config.browser.cdpUrl }),
+      runOptions: {
+        llm: provider,
+        dataDir: loaded.paths.dataDir,
+        heartbeatMs: parseDuration(loaded.config.runs.heartbeatInterval),
+        staleAfterMs: parseDuration(loaded.config.runs.staleAfter),
+      },
+      log: (line) => console.log(line),
+      logError: (line) => console.error(line),
+    });
     return failures === 0 ? 0 : 1;
   } finally {
     store.close();

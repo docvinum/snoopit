@@ -45,7 +45,14 @@ function toJob(row: JobRow): Job {
 export class JobRepository {
   constructor(private readonly db: Db) {}
 
-  /** Creates or updates a job, keyed by its slugified name. */
+  /**
+   * Creates or updates a job, keyed by its slugified name.
+   *
+   * On update, a field the caller leaves `undefined` keeps its stored value. That
+   * matters for `schedule` and `enabled` above all: `snoopit run` re-registers the
+   * job from its workflow definition, which knows nothing of either, and must not
+   * wipe a schedule or re-enable a job an operator disabled.
+   */
   upsert(input: JobInput): Job {
     const id = makeJobId(input.name);
     const at = nowIso();
@@ -58,11 +65,15 @@ export class JobRepository {
          ON CONFLICT(id) DO UPDATE SET
            name = excluded.name,
            workflow = excluded.workflow,
-           browser_profile = excluded.browser_profile,
-           network_profile = excluded.network_profile,
-           schedule_json = excluded.schedule_json,
-           budget_json = excluded.budget_json,
-           enabled = excluded.enabled,
+           browser_profile = CASE WHEN @keepBrowserProfile THEN jobs.browser_profile
+                                  ELSE excluded.browser_profile END,
+           network_profile = CASE WHEN @keepNetworkProfile THEN jobs.network_profile
+                                  ELSE excluded.network_profile END,
+           schedule_json = CASE WHEN @keepSchedule THEN jobs.schedule_json
+                                ELSE excluded.schedule_json END,
+           budget_json = CASE WHEN @keepBudget THEN jobs.budget_json
+                              ELSE excluded.budget_json END,
+           enabled = CASE WHEN @keepEnabled THEN jobs.enabled ELSE excluded.enabled END,
            updated_at = excluded.updated_at`,
       )
       .run({
@@ -75,6 +86,11 @@ export class JobRepository {
         budget: toJson(orNull(input.budget)),
         enabled: fromBool(input.enabled ?? true),
         at,
+        keepBrowserProfile: fromBool(input.browserProfile === undefined),
+        keepNetworkProfile: fromBool(input.networkProfile === undefined),
+        keepSchedule: fromBool(input.schedule === undefined),
+        keepBudget: fromBool(input.budget === undefined),
+        keepEnabled: fromBool(input.enabled === undefined),
       });
     return this.get(id)!;
   }

@@ -155,6 +155,8 @@ export interface PageHandle {
   fetch(url: string, options?: { readonly timeoutMs?: number }): Promise<FetchResult>;
 
   close(): Promise<void>;
+  /** True once `close()` has been called, or the tab went away on its own. */
+  isClosed(): boolean;
 }
 
 export interface BrowserBackend {

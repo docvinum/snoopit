@@ -2,6 +2,7 @@ import { openDatabase, schemaVersion, type Db, type OpenDatabaseOptions } from '
 import { ArtifactRepository } from './repositories/artifacts.js';
 import { EventRepository } from './repositories/events.js';
 import { FrontierRepository } from './repositories/frontier.js';
+import { ItemRepository } from './repositories/items.js';
 import { JobRepository } from './repositories/jobs.js';
 import { PageRepository } from './repositories/pages.js';
 import { RunRepository } from './repositories/runs.js';
@@ -20,6 +21,7 @@ export class Store {
   readonly frontier: FrontierRepository;
   readonly artifacts: ArtifactRepository;
   readonly events: EventRepository;
+  readonly items: ItemRepository;
 
   constructor(readonly db: Db) {
     this.jobs = new JobRepository(db);
@@ -28,6 +30,7 @@ export class Store {
     this.frontier = new FrontierRepository(db);
     this.artifacts = new ArtifactRepository(db);
     this.events = new EventRepository(db);
+    this.items = new ItemRepository(db);
   }
 
   static open(options: OpenDatabaseOptions): Store {

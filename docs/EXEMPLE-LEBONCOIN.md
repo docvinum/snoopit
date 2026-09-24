@@ -21,10 +21,11 @@ Voir [`docs/DEPLOYMENT.md`](DEPLOYMENT.md).
 ### 1.2 Session leboncoin authentifiée dans le profil Chrome persistant
 
 Les recherches enregistrées sont derrière le compte. `snoopit` **ne se connecte
-pas** — c'est la règle 8 de [`skills/snoopit/SKILL.md`](../skills/snoopit/SKILL.md)
-et la règle 4 de [`AGENTS.md`](../AGENTS.md) (aucun contournement, aucune
-automatisation d'identité). La session doit déjà exister dans
-`/var/lib/snoopit/chrome-profile/`.
+pas** : la session est posée à la main dans le profil Chrome, et un workflow ne
+contient jamais d'identifiant (règle 8 de
+[`skills/snoopit/SKILL.md`](../skills/snoopit/SKILL.md), règle 3 d'
+[`AGENTS.md`](../AGENTS.md) : aucun secret dans la configuration). La session doit
+déjà exister dans `/var/lib/snoopit/chrome-profile/`.
 
 Chrome tourne sans écran (Xvfb, §1.3), donc on se connecte **une fois**, par
 l'un de :
@@ -99,14 +100,18 @@ bouton « Continuer sans accepter » ou `#didomi-agree-to-all`.
 Liste d'annonces : `article` contenant `[data-qa-id="aditem_container"]`, lien
 `a[href^="/ad/"]` (titre, prix, localisation dans des `<p>` / `<span>` de la carte).
 
-Le workflow **assume** la session (aucun identifiant dans le code ni la config) et
-rapporte `authenticated: false` s'il atterrit sur `auth.leboncoin.fr`.
+Le workflow **assume** la session (aucun identifiant dans le code ni la config) et la
+déclare : `ctx.visit(url, { session: { expectHost: 'www.leboncoin.fr' } })`. Une
+redirection vers `auth.leboncoin.fr` arrête alors le run en `auth-required`
+(événement `AUTH_REQUIRED`, code de sortie 3) au lieu d'enregistrer la page de
+connexion comme contenu.
 
 ### 1.4 Protection anti-bot
 
 leboncoin filtre agressivement (DataDome). Face à un **403**, CAPTCHA ou
-interstitiel DataDome, le run s'arrête et le rapporte : **on ne contourne pas** la
-protection, ni par rotation d'identité ni par autre moyen.
+interstitiel DataDome, `ctx.visit` arrête le run et le rapporte (`blocked:<raison>`,
+code de sortie 3) : **on ne contourne pas** la protection, ni par rotation d'identité
+ni par autre moyen.
 
 ### 1.5 Clé LLM (optionnelle)
 
@@ -114,12 +119,22 @@ Sans `SNOOPIT_LLM_API_KEY` dans `/etc/snoopit/snoopit.env`, la recovery s'arrêt
 L1 — suffisant pour une bannière ou une modale. Une clé L2 aide quand la structure
 de la page bouge ; le chemin nominal reste à zéro appel.
 
-### 1.6 Planification : pas de commande dédiée dans le MVP
+### 1.6 Planification : `schedule_json` sur la ligne `jobs`
 
-`snoopit run <workflow>` crée un job **sans `schedule`** → `snoopit tick` ne le
-reprend jamais. Pour du récurrent aujourd'hui : un `cron` système qui appelle
-`snoopit run leboncoin-recherches`, ou écrire `schedule_json` sur la ligne `jobs` en
-base. Un `schedule` first-class n'est pas encore exposé.
+`snoopit run <workflow>` crée le job **sans `schedule`** → `snoopit tick` ne le
+reprend pas tant qu'on ne lui en donne pas un. Il n'y a pas encore de commande
+dédiée ; on l'écrit en base après le premier run :
+
+```bash
+sudo -u snoopit sqlite3 /var/lib/snoopit/data/snoopit.db "UPDATE jobs SET schedule_json =
+  '{"frequency":"daily","window":{"from":"07:00","to":"09:00"},"timeZone":"Europe/Paris"}'
+  WHERE id = 'leboncoin-recherches';"
+node dist/src/cli/main.js due     # doit expliquer quand le job partira
+```
+
+Les runs manuels suivants (`snoopit run`) **conservent** ce planning. Sans
+`timeZone`, la fenêtre se lit dans `scheduler.timeZone` de la configuration, à
+défaut en UTC.
 
 ### 1.7 Build après ajout du workflow
 
@@ -163,31 +178,39 @@ Type `collect`. budget: { maxPages: 40, maxDuration: '15m', maxLlmCalls: 0 }.
 Patron deux phases (découverte → collecte) du SKILL.
 
 Phase 1 — découverte :
-  - ctx.visit https://www.leboncoin.fr/my-searches, waitFor le sélecteur de liste,
-    ctx.dismissOverlays.
-  - Si l'état attendu n'est pas là, ctx.recover en garde (goal: accéder à la liste
-    des recherches ; expectedState: le sélecteur de liste ; allowedActions:
-    ['click','scroll','close_overlay']). S'il échoue → termine le run en renvoyant
-    { authenticated: false, recherches: 0 } et écris un recherches.md qui le dit.
-    NE TENTE JAMAIS de te connecter.
+  - ctx.frontier.enqueueDueRevisits() en tout premier : sans cela, une page de
+    résultats déjà traitée ne serait plus jamais revisitée.
+  - ctx.visit https://www.leboncoin.fr/my-searches avec waitFor le sélecteur de
+    liste et session: { expectHost: 'www.leboncoin.fr' }. Une session expirée
+    arrête le run en auth-required : NE TENTE JAMAIS de te connecter, n'écris
+    aucun code de repli pour ce cas.
+  - ctx.dismissOverlays ; si la liste n'est toujours pas là, ctx.recover en garde
+    (goal: accéder à la liste des recherches ; expectedState: le sélecteur de
+    liste ; allowedActions: ['scroll','close_overlay']).
   - ctx.extract chaque recherche → ctx.frontier.discover(urlResultats,
     { kind: 'page', meta: { intitule, criteres } }).
 
 Phase 2 — collecte :
-  - Pour chaque URL de résultats prise dans ctx.frontier.take(...), ctx.visit,
-    extraire les 20 premières annonces (id, titre, prix, date/heure de publication,
-    URL, localisation). Sers-toi de visit.firstVisit / visit.changed comme signal.
-    ctx.frontier.complete(entry). Une page illisible → ctx.frontier.fail, on continue.
+  - Pour chaque URL de résultats prise dans ctx.frontier.take(...), ctx.visit avec
+    revisitAfter: '20h' et la même option session, puis extraire les 20 premières
+    annonces (id, titre, prix EN NOMBRE, date/heure de publication, URL,
+    localisation, nombre de photos).
+  - Pour chaque annonce : ctx.items.observe(`annonce:${idRecherche}`, id, champs).
+    Son status ('new' | 'changed' | 'returned' | 'unchanged') et son diff
+    (ex. { prix: { from: 250, to: 220 } }) sont LE signal. Ne compare jamais avec
+    un JSON du run précédent : l'état est en SQLite.
+  - N'appelle PAS ctx.items.markMissing : 20 premières annonces ≠ liste complète,
+    une annonce sortie du top 20 n'a pas disparu.
+  - ctx.frontier.complete(entry). Une page illisible → ctx.frontier.fail, on continue.
   - ctx.artifacts.writeJson('recherches.json', ...) : par recherche, critères +
-    annonces relevées.
+    annonces relevées avec leur status.
   - ctx.artifacts.writeMarkdown('recherches.md', ...) : nb de recherches, et par
-    recherche le nb de nouvelles annonces depuis le dernier run.
+    recherche les nouvelles annonces et les baisses de prix.
 
 return {
   recherches,           // nb de recherches enregistrées vues
   verifiees,            // nb de pages de résultats réellement visitées CE run
-  nouvelles, modifiees, // compteurs — verifiees compté à part (piège du SKILL)
-  authenticated: true,
+  nouvelles, modifiees, // compteurs issus de ctx.items — verifiees compté à part
 }
 
 Contraintes fermes :
@@ -210,8 +233,10 @@ contre le Chrome persistant. Montre-moi report.md et recherches.md.
 - Artifacts et rapports sous `/var/lib/snoopit/data/jobs/leboncoin-recherches/`.
 - `sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js status` pour l'état du job
   (pages, frontier).
-- Si le rapport indique `authenticated: false`, la session a expiré — refaire
-  l'étape 1.2.
+- Si le run s'arrête en `auth-required` (événement `AUTH_REQUIRED`, code de sortie
+  3), la session a expiré — refaire l'étape 1.2.
+- Historique d'une annonce (apparition, prix, disparition) : tables `items` et
+  `item_changes`, ou `ctx.items.history(kind, id)` depuis un workflow.
 - Si chaque visite tombe sur un interstitiel DataDome (User-Agent `HeadlessChrome`
   dans `/json/version`), le Chrome tourne encore en `--headless=new` — reprendre
   l'étape 1.3.

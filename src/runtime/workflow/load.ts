@@ -8,7 +8,7 @@
 
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, extname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { WorkflowDefinition } from './types.js';
 
 /**
@@ -16,10 +16,11 @@ import type { WorkflowDefinition } from './types.js';
  *
  * `dist/src/runtime/workflow/load.js` -> `dist/workflows`. Derived from
  * `import.meta.url` rather than the working directory, so the CLI behaves the same
- * whatever directory it is invoked from.
+ * whatever directory it is invoked from. `fileURLToPath`, not `URL.pathname`: the
+ * latter keeps percent-escapes, so an install path with a space would not resolve.
  */
 export function defaultWorkflowsDir(): string {
-  return resolve(new URL('../../../workflows', import.meta.url).pathname);
+  return fileURLToPath(new URL('../../../workflows', import.meta.url));
 }
 
 export function listWorkflows(dir: string = defaultWorkflowsDir()): string[] {

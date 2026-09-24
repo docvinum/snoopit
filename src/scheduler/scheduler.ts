@@ -13,7 +13,10 @@ import { isDue, pagesForRun, type DueVerdict } from './window.js';
 
 export interface SchedulerOptions {
   readonly now?: Date;
-  /** Zone in which schedule windows are interpreted. Defaults to UTC. */
+  /**
+   * Zone in which schedule windows are interpreted for jobs that do not name their
+   * own (`schedule.timeZone`). Defaults to UTC.
+   */
   readonly timeZone?: string;
 }
 
@@ -27,10 +30,12 @@ export interface JobDecision {
 /** Evaluates every enabled job, due or not. Useful for `snoopit due`. */
 export function evaluateJobs(store: Store, options: SchedulerOptions = {}): JobDecision[] {
   const now = options.now ?? new Date();
-  const timeZone = options.timeZone ?? 'UTC';
+  const defaultZone = options.timeZone ?? 'UTC';
 
   return store.jobs.list({ enabledOnly: true }).map((job) => {
     const schedule = job.schedule ?? { frequency: 'manual' as const };
+    // The job's own zone wins: it is part of what the schedule means.
+    const timeZone = schedule.timeZone ?? defaultZone;
     const latest = store.runs.latestForJob(job.id);
 
     const verdict = isDue({

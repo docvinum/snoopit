@@ -206,6 +206,22 @@ export function isSameOrigin(a: string, b: string): boolean {
 }
 
 /**
+ * The host a URL belongs to, for "did we leave the site?" questions: lowercased,
+ * a leading `www.` dropped, port ignored. `www.example.com` and `example.com` are
+ * one site; `auth.example.com` is not the same *place* — and a redirect there is
+ * precisely what a login wall looks like.
+ *
+ * @returns `null` when the URL does not parse.
+ */
+export function siteHost(input: string): string | null {
+  try {
+    return new URL(input).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Applies a page's declared `<link rel="canonical">`.
  *
  * A cross-origin canonical link is ignored on purpose. Honouring it would let any
