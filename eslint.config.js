@@ -33,8 +33,24 @@ export default tseslint.config(
   {
     // The browser adapters are the one place that legitimately evaluates code in a
     // page, so browser globals are expected here and nowhere else.
-    files: ['src/runtime/browser/cdp.ts', 'src/runtime/browser/fake.ts'],
+    // `page-functions.ts` is page-side code shared by the real-browser backends, and
+    // `extension/` is the browser extension itself.
+    files: [
+      'src/runtime/browser/cdp.ts',
+      'src/runtime/browser/fake.ts',
+      'src/runtime/browser/page-functions.ts',
+      'extension/**/*.ts',
+    ],
     rules: { 'no-restricted-globals': 'off' },
+  },
+  {
+    // Build scripts are plain Node modules outside the TypeScript project.
+    files: ['scripts/**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: { console: 'readonly' },
+    },
   },
   {
     // The CLI is the one place that legitimately writes to stdout.

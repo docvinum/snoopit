@@ -1,0 +1,19 @@
+# The dedicated, visible Chrome that snoopit's extension drives
+# (`browser.backend: extension`, docs/DEPLOYMENT.md §9).
+#
+# Install for the desktop user of dell, to start it at login:
+#   cp deploy/desktop/snoopit-chrome.desktop ~/.config/autostart/
+#   cp deploy/desktop/snoopit-chrome.desktop ~/.local/share/applications/
+#
+# Its own profile, separate from the everyday one: automation tabs and the
+# leboncoin session live here. No --remote-debugging-port — nothing to attach to.
+[Desktop Entry]
+Type=Application
+Name=Chrome snoopit
+Comment=Chrome dédié aux visites de snoopit (extension, sans port de débogage)
+Exec=sh -c 'exec google-chrome-stable --user-data-dir="$HOME/.config/snoopit-chrome" --class=snoopit-chrome --no-first-run --no-default-browser-check'
+Icon=google-chrome
+Terminal=false
+Categories=Network;WebBrowser;
+StartupWMClass=snoopit-chrome
+X-GNOME-Autostart-enabled=true

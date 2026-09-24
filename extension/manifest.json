@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "snoopit",
+  "version": "0.1.0",
+  "description": "Exécute les visites de snoopit dans ce Chrome, sans port de débogage. Se connecte uniquement à snoopit sur 127.0.0.1, après appairage.",
+  "minimum_chrome_version": "120",
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": [
+    "alarms",
+    "declarativeNetRequestWithHostAccess",
+    "scripting",
+    "storage",
+    "tabs",
+    "webNavigation",
+    "webRequest"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "action": { "default_title": "snoopit" }
+}

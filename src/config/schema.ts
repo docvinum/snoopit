@@ -67,6 +67,26 @@ export const configSchema = z
          * interface with no authentication, and this is that lesson encoded.
          */
         cdpUrl: z.string().url().default('http://127.0.0.1:9222'),
+        /**
+         * How snoopit drives Chrome. `cdp`: over the remote-debugging port of a
+         * Chrome it attaches to. `extension`: through snoopit's extension, inside a
+         * Chrome with no debugging port at all — one a person can see and use.
+         */
+        backend: z.enum(['cdp', 'extension']).default('cdp'),
+        extension: z
+          .object({
+            /** Loopback port snoopit opens during a run; the extension connects to it. */
+            port: z.number().int().min(1024).max(65535).default(9333),
+            /** Name of the env var holding the pairing token. Never the token itself. */
+            tokenEnv: z.string().default('SNOOPIT_EXTENSION_TOKEN'),
+            /** How long a run waits for the extension. It retries every 30 s at least. */
+            connectTimeout: z
+              .string()
+              .regex(durationPattern, 'expected a duration like "45s"')
+              .default('45s'),
+          })
+          .strict()
+          .default({}),
         defaultProfile: z.string().default('desktop-chrome'),
         navigationTimeout: z
           .string()

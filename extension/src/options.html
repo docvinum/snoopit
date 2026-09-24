@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>snoopit — appairage</title>
+    <style>
+      body {
+        font:
+          15px/1.5 system-ui,
+          sans-serif;
+        max-width: 34rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      label {
+        display: block;
+        margin-top: 1rem;
+        font-weight: 600;
+      }
+      input {
+        width: 100%;
+        padding: 0.4rem;
+        font: inherit;
+        box-sizing: border-box;
+      }
+      button {
+        margin-top: 1.2rem;
+        padding: 0.5rem 1rem;
+        font: inherit;
+      }
+      #status {
+        margin-top: 1.5rem;
+        padding: 0.6rem;
+        background: #f1f1f1;
+        border-radius: 6px;
+      }
+      small {
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>snoopit</h1>
+    <p>
+      Cette extension exécute les visites de snoopit dans ce Chrome. Elle ne se connecte qu'à
+      snoopit sur <code>127.0.0.1</code>, et seulement après une preuve mutuelle du jeton
+      ci-dessous.
+    </p>
+    <label for="token">Jeton d'appairage</label>
+    <input id="token" type="password" autocomplete="off" />
+    <small
+      >La valeur de <code>SNOOPIT_EXTENSION_TOKEN</code> sur la machine snoopit (au moins 32
+      caractères).</small
+    >
+    <label for="port">Port</label>
+    <input id="port" type="number" min="1024" max="65535" />
+    <button id="save" type="button">Enregistrer et se connecter</button>
+    <div id="status">…</div>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

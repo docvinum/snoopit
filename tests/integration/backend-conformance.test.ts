@@ -19,6 +19,11 @@ import {
   type BrowserBackend,
 } from '../../src/runtime/browser/types.js';
 import { downloadTo } from '../../src/runtime/downloads/download.js';
+import {
+  extensionBrowserAvailable,
+  launchExtensionBrowser,
+  type ExtensionBrowser,
+} from '../support/extension-browser.js';
 import { contentHash } from '../../src/util/hash.js';
 import { buildFakeSite } from '../support/fake-site.js';
 import { startFixtureServer, type FixtureServer } from '../support/server.js';
@@ -41,34 +46,48 @@ async function chromeAvailable(): Promise<boolean> {
 
 let server: FixtureServer;
 let hasChrome = false;
+let extensionBrowser: ExtensionBrowser | null = null;
 
 beforeAll(async () => {
   server = await startFixtureServer();
   hasChrome = await chromeAvailable();
-});
+  if (extensionBrowserAvailable()) extensionBrowser = await launchExtensionBrowser(19333);
+}, 60_000);
 
 afterAll(async () => {
+  await extensionBrowser?.close();
   await server.close();
 });
 
 interface Harness {
   readonly name: string;
-  /** Both backends are given byte-identical fixture content. */
+  /** Every backend is given byte-identical fixture content. */
   create(): Promise<BrowserBackend>;
   /** True when the backend models timing and layout. */
   readonly isReal: boolean;
+  /** False when what this backend needs is absent here; its tests are then skipped. */
+  available(): boolean;
 }
 
 const HARNESSES: Harness[] = [
   {
     name: 'FakeBackend',
     isReal: false,
+    available: () => true,
     create: () => Promise.resolve(new FakeBackend(buildFakeSite(server.origin))),
   },
   {
     name: 'CdpBackend',
     isReal: true,
+    available: () => hasChrome,
     create: () => CdpBackend.connect({ cdpUrl: CDP_URL, defaultTimeoutMs: 10_000 }),
+  },
+  {
+    // No debugging port: a Chromium a person could see, driven by the extension.
+    name: 'ExtensionBackend',
+    isReal: true,
+    available: () => extensionBrowser !== null,
+    create: () => extensionBrowser!.connect(),
   },
 ];
 
@@ -77,17 +96,17 @@ for (const harness of HARNESSES) {
     let backend: BrowserBackend;
 
     beforeAll(async () => {
-      if (harness.isReal && !hasChrome) return;
+      if (!harness.available()) return;
       backend = await harness.create();
-    });
+    }, 30_000);
 
     afterAll(async () => {
-      if (harness.isReal && !hasChrome) return;
+      if (!harness.available()) return;
       await backend.close();
     });
 
     /** Skips the whole body when this harness needs a Chrome that is not there. */
-    const runs = (): boolean => !harness.isReal || hasChrome;
+    const runs = (): boolean => harness.available();
 
     describe('navigation', () => {
       it('reports the final URL and a 200 status', async () => {
@@ -392,5 +411,14 @@ describe('backend coverage', () => {
         : `[conformance] no Chrome at ${CDP_URL} — CdpBackend half skipped`,
     );
     expect(typeof hasChrome).toBe('boolean');
+  });
+
+  it('reports whether the extension half ran', () => {
+    console.error(
+      extensionBrowser === null
+        ? '[conformance] no Chromium or no built extension — ExtensionBackend half skipped'
+        : '[conformance] ExtensionBackend exercised in Chromium, extension loaded, no debug port',
+    );
+    expect(typeof extensionBrowserAvailable()).toBe('boolean');
   });
 });

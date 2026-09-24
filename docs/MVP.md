@@ -54,7 +54,7 @@ ne pouvait satisfaire, et c'est elle qui définit le produit.
 
 | Exclu | Raison |
 |---|---|
-| Extension Chrome | Audit §7 — ne résout aucun problème sur notre cible |
+| Extension Chrome | Audit §7 — ne résout aucun problème sur notre cible. *Ajoutée après le MVP comme second moteur (`browser.backend: extension`), pour un Chrome visible sans port de débogage : ARCHITECTURE D2.* |
 | Recovery LLM L2/L3 | Lot 5 ; le nominal doit d'abord être solide sans LLM |
 | Profils réseau / proxy | Interface définie au Lot 1, implémentation après le MVP |
 | Runs concurrents / distribution | §22 de la spec — pas d'architecture distribuée prématurée |

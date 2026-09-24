@@ -64,6 +64,11 @@ que la base ne peut pas reconstruire.
 
 ### 1.3 Parcourir le site : Chrome sous Xvfb
 
+> **Alternative : le moteur extension.** Un Chrome visible sur la session de bureau
+> de dell, sans port de débogage, où l'on se connecte à leboncoin à la main —
+> [`DEPLOYMENT.md`](DEPLOYMENT.md) §9. Le workflow est inchangé : seul
+> `browser.backend` change. Ce qui suit concerne le moteur CDP.
+
 `--headless=new` s'annonce `HeadlessChrome` : une visite de `https://www.leboncoin.fr/`
 répond **403** avec un interstitiel DataDome, page vide. Un Chrome « vrai » sous
 Xvfb — même binaire, même profil, **sans** `--headless=new` — charge le site
