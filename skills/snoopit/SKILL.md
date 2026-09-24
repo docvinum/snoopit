@@ -263,7 +263,9 @@ budget: { maxPages: 50, maxDuration: '20m', maxDownloadBytes: 500_000_000, maxLl
 ```
 
 `maxPages` compte les **unités de travail** : une visite et un document collecté
-valent chacun 1.
+valent chacun 1. Toute limite que vous ne nommez pas vient de `defaultBudget`
+(configuration) : déclarez celles qui comptent pour votre site, les autres restent
+bornées.
 
 Atteindre un budget **n'est pas un échec** : le run se termine `completed` avec
 `stopReason: budget:max_pages`. `ctx.frontier.take(n)` est déjà borné par ce qui

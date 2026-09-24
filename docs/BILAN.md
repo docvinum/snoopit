@@ -385,9 +385,13 @@ disparitions détectées quand la liste est complète. Il a demandé une primiti
 `ctx.frontier.complete/fail(entry, { revisitAfter })`, pour que le travail atteint
 sans `visit` revienne en file.
 
-Reste connu : `defaultBudget`, `browser.navigationTimeout` et les profils de
-navigateur sont validés par la configuration mais pas encore appliqués ; une entrée
-de frontier en échec n'est pas retentée automatiquement.
+`defaultBudget` est désormais appliqué, limite par limite, sous le budget du
+workflow : jusque-là, un workflow sans budget tournait sans aucune limite malgré la
+configuration.
+
+Reste connu : `browser.navigationTimeout` et les profils de navigateur sont validés
+par la configuration mais pas encore appliqués ; une entrée de frontier en échec
+n'est retentée que si le workflow le demande (`fail(entry, …, { revisitAfter })`).
 
 ---
 

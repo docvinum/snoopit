@@ -84,6 +84,36 @@ describe('runDueJobs', () => {
     expect(store.runs.latestForJob('ok')?.status).toBe('completed');
   });
 
+  it('applies the configured default budget to scheduled runs', async () => {
+    const endless = workflow({
+      name: 'endless',
+      async run(ctx) {
+        for (;;) {
+          const { page } = await ctx.visit('http://site.test/');
+          await page.close();
+        }
+      },
+    });
+
+    await runDueJobs(decisionsFor('endless'), {
+      store,
+      loadWorkflow: () => Promise.resolve(endless as WorkflowDefinition),
+      connect: () =>
+        Promise.resolve(
+          new FakeBackend({ routes: { 'http://site.test/': { status: 200, body: 'ok' } } }),
+        ),
+      runOptions: {
+        dataDir: mkdtempSync(join(tmpdir(), 'snoopit-tick-')),
+        defaultBudget: { maxPages: 3 },
+        onLine: () => {},
+      },
+      log: () => {},
+      logError: () => {},
+    });
+
+    expect(store.runs.latestForJob('endless')?.stopReason).toBe('budget:max_pages');
+  });
+
   it('keeps going when the browser cannot be reached for one job', async () => {
     let attempts = 0;
     const result = await runDueJobs(decisionsFor('first', 'second'), {

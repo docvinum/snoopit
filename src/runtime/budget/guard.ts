@@ -37,6 +37,36 @@ export interface BudgetUsage {
   readonly elapsedMs: number;
 }
 
+/**
+ * A budget whose limits may be explicitly `undefined` — the shape the validated
+ * config hands over. Unset and `undefined` mean the same thing: no limit here.
+ */
+export type LooseBudget = { readonly [K in keyof RunBudget]?: RunBudget[K] | undefined };
+
+/**
+ * The budget a run actually enforces: the specific one, over the defaults.
+ *
+ * Merged limit by limit, so a workflow declaring only `{ maxPages: 12 }` still gets
+ * the configured duration and error limits. Replacing the defaults wholesale would
+ * leave it unbounded on every limit it did not think to name — the failure the
+ * defaults exist to prevent. A limit the workflow does name always wins.
+ *
+ * @returns `null` only when there is neither a specific budget nor a default one.
+ */
+export function effectiveBudget(
+  specific: LooseBudget | null | undefined,
+  defaults: LooseBudget | null | undefined,
+): RunBudget | null {
+  if ((specific ?? null) === null && (defaults ?? null) === null) return null;
+  const merged: Record<string, unknown> = {};
+  for (const source of [defaults, specific]) {
+    for (const [name, value] of Object.entries(source ?? {})) {
+      if (value !== undefined) merged[name] = value;
+    }
+  }
+  return merged;
+}
+
 export class BudgetExceededError extends Error {
   constructor(
     readonly limit: BudgetLimitName,

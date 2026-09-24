@@ -41,7 +41,13 @@ import {
 
 /** linkedom's document is DOM-compatible, so the rest of the file is plain DOM code. */
 function parseDocument(html: string): Document {
-  return parseHTML(html).document;
+  const document = parseHTML(html).document;
+  // A body that is not HTML (`boom`, a plain-text error) parses to a document with
+  // no root. Chrome shows such a body inside a document of its own; so does the
+  // fake, or any query against an error page would crash here and nowhere else.
+  if ((document.documentElement as Element | null) !== null) return document;
+  const text = html.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  return parseHTML(`<html><body><pre>${text}</pre></body></html>`).document;
 }
 
 /** One HTTP response the fake knows how to serve. */

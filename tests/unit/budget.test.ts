@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BudgetExceededError, BudgetGuard } from '../../src/runtime/budget/guard.js';
+import {
+  BudgetExceededError,
+  BudgetGuard,
+  effectiveBudget,
+} from '../../src/runtime/budget/guard.js';
 
 /** A controllable clock, so duration limits are tested without waiting. */
 function fakeClock(start = 1_000_000): { now: () => number; advance: (ms: number) => void } {
@@ -143,5 +147,41 @@ describe('BudgetGuard — usage', () => {
       errors: 2,
       elapsedMs: 5000,
     });
+  });
+});
+
+describe('effectiveBudget', () => {
+  const defaults = { maxPages: 100, maxDuration: '20m', maxLlmCalls: 3, maxErrors: 10 };
+
+  it('gives a workflow without a budget every default limit', () => {
+    expect(effectiveBudget(null, defaults)).toEqual(defaults);
+  });
+
+  it('lets each limit a workflow names win, and inherits the others', () => {
+    expect(effectiveBudget({ maxPages: 12, maxLlmCalls: 0 }, defaults)).toEqual({
+      maxPages: 12,
+      maxDuration: '20m',
+      maxLlmCalls: 0,
+      maxErrors: 10,
+    });
+  });
+
+  it('keeps a limit only the workflow sets', () => {
+    expect(effectiveBudget({ maxDownloadBytes: 5 }, { maxPages: 1 })).toEqual({
+      maxPages: 1,
+      maxDownloadBytes: 5,
+    });
+  });
+
+  it('treats an explicitly undefined default as no default', () => {
+    expect(effectiveBudget({ maxPages: 2 }, { maxPages: undefined, maxErrors: 1 })).toEqual({
+      maxPages: 2,
+      maxErrors: 1,
+    });
+  });
+
+  it('stays unbounded only when there is nothing at all', () => {
+    expect(effectiveBudget(null, null)).toBeNull();
+    expect(effectiveBudget({ maxPages: 3 }, null)).toEqual({ maxPages: 3 });
   });
 });
