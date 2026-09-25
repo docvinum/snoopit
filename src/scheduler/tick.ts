@@ -37,8 +37,9 @@ export async function runDueJobs(due: readonly JobDecision[], deps: TickDeps): P
   let failures = 0;
   for (const { job, pagesPerRun } of due) {
     let browser: BrowserBackend | null = null;
+    let definition: WorkflowDefinition | null = null;
     try {
-      const definition = await deps.loadWorkflow(job.workflow);
+      definition = await deps.loadWorkflow(job.workflow);
       browser = await deps.connect();
       const outcome = await runWorkflow(definition, {
         ...deps.runOptions,
@@ -51,7 +52,18 @@ export async function runDueJobs(due: readonly JobDecision[], deps: TickDeps): P
       log(`${job.id}: ${outcome.run.status} (${outcome.run.stopReason ?? '—'})`);
       if (outcome.error !== null) failures += 1;
     } catch (error) {
-      logError(`${job.id}: ${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      logError(`${job.id}: ${message}`);
+      if (definition?.circuitBreaker?.disableOn.includes('error')) {
+        deps.store.jobs.setEnabled(job.id, false);
+        deps.store.events.append({
+          jobId: job.id,
+          type: 'JOB_DISABLED',
+          level: 'error',
+          message: 'Job désactivé par le coupe-circuit avant le démarrage du run',
+          data: { reason: 'error', error: message },
+        });
+      }
       failures += 1;
     } finally {
       await browser?.close();

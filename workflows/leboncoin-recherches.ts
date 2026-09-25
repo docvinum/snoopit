@@ -438,6 +438,8 @@ export default workflow({
   // Une visite de /my-searches par recherche revue, plus la première. Les clics ne
   // comptent pas dans maxPages : c'est le lot (pagesPerRun, sinon 5) qui les borne.
   budget: { maxPages: 12, maxDuration: '10m', maxErrors: 3 },
+  // Les erreurs qui demandent une personne arrêtent aussi le planning.
+  circuitBreaker: { disableOn: ['error', 'blocked', 'auth-required'] },
 
   async run(ctx) {
     ctx.frontier.enqueueDueRevisits();

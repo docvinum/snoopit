@@ -34,6 +34,18 @@ export default workflow({
 Le fichier est compilé avec le projet (`npm run build`) : un workflow qui ne
 type-checke pas n'atteint jamais un run.
 
+### Coupe-circuit opérateur
+
+Pour un workflow qui doit attendre une personne après un refus du site, une session
+expirée ou une erreur imprévue, active explicitement le coupe-circuit :
+
+```ts
+circuitBreaker: { disableOn: ['error', 'blocked', 'auth-required'] },
+```
+
+Le job est alors désactivé dans SQLite et l'événement `JOB_DISABLED` est ajouté au
+rapport. Aucun passage planifié ne le relance avant réactivation explicite.
+
 ---
 
 ## 2. Ce que le runtime fait pour vous

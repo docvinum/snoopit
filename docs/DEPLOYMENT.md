@@ -171,6 +171,25 @@ Chrome, §4). Un `tick` continue avec les jobs suivants quand l'un d'eux échoue
 Un run `blocked:*` ou `budget:*` se termine `completed`, jamais `failed` : dans les
 deux cas le système a fait exactement ce qu'on lui demandait.
 
+### Réactiver un job désactivé
+
+Un workflow peut déclarer un coupe-circuit. Après une erreur qui demande une personne,
+il désactive le job et écrit `JOB_DISABLED` dans les événements. Après correction,
+vérifiez `doctor`, puis réactivez explicitement le job :
+
+```bash
+sudo -u snoopit node --input-type=module -e '
+import Database from "/opt/snoopit/node_modules/better-sqlite3/lib/index.js";
+const db = new Database("/var/lib/snoopit/data/snoopit.db");
+db.prepare("UPDATE jobs SET enabled = 1, updated_at = ? WHERE id = ?")
+  .run(new Date().toISOString(), "leboncoin-recherches");
+db.close();
+'
+```
+
+Confirmez avec `snoopit status` puis `snoopit due` : un job réactivé reste soumis à
+sa fenêtre quotidienne et ne se relance pas rétroactivement hors de celle-ci.
+
 ---
 
 ## 7. Chrome sans affichage

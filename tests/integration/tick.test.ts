@@ -133,4 +133,27 @@ describe('runDueJobs', () => {
     expect(result.failures).toBe(1);
     expect(store.runs.latestForJob('second')?.status).toBe('completed');
   });
+
+  it('opens an opted-in circuit when its browser cannot be reached', async () => {
+    const guarded = workflow({
+      name: 'guarded',
+      circuitBreaker: { disableOn: ['error'] },
+      run: () => Promise.resolve({}),
+    });
+    const [decision] = decisionsFor('guarded');
+
+    await runDueJobs([decision!], {
+      store,
+      loadWorkflow: () => Promise.resolve(guarded),
+      connect: () => Promise.reject(new Error('extension unavailable')),
+      runOptions: { dataDir: mkdtempSync(join(tmpdir(), 'snoopit-tick-')), onLine: () => {} },
+      log: () => {},
+      logError: () => {},
+    });
+
+    expect(store.jobs.get('guarded')?.enabled).toBe(false);
+    expect(store.events.listByType('guarded', 'JOB_DISABLED')[0]).toMatchObject({
+      data: { reason: 'error', error: 'extension unavailable' },
+    });
+  });
 });

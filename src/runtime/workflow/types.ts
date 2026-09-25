@@ -208,11 +208,11 @@ export interface WorkflowContext {
   dismissOverlays(page: PageHandle): Promise<DismissResult>;
 
   /**
-   * Gets the page back to an expected state, escalating L1 -> L2 -> L3 -> L4.
+   * Gets the page back to an expected state with deterministic heuristics.
    *
    * Returns immediately when the state is already there, so guarding an action with
-   * it costs nothing on the nominal path. Throws `RecoveryFailedError` when every
-   * level is exhausted, and `BlockedError` when the site is refusing us.
+   * it costs nothing on the nominal path. Throws `RecoveryFailedError` when the
+   * heuristics are exhausted, and `BlockedError` when the site is refusing us.
    */
   recover(page: PageHandle, options: RecoverOptions): Promise<RecoveryOutcome>;
 }
@@ -225,6 +225,10 @@ export interface WorkflowDefinition<T = unknown> {
   readonly budget?: RunBudget;
   readonly browserProfile?: string;
   readonly networkProfile?: string;
+  /** Disables this job after an outcome that needs an operator. Opt-in per workflow. */
+  readonly circuitBreaker?: {
+    readonly disableOn: readonly ('error' | 'blocked' | 'auth-required')[];
+  };
   /** The workflow body. Its return value is stored in the run report. */
   run(ctx: WorkflowContext): Promise<T>;
 }

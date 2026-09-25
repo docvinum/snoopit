@@ -176,6 +176,7 @@ déterminisme, observabilité, maintenabilité par coding agent et extensibilit�
 | [`docs/BILAN.md`](docs/BILAN.md) | Bilan lot par lot : décisions, enseignements, limites, reste à faire |
 | [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) | Outillage, règles TypeScript, frontières d'architecture, tests |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Écrire un workflow : primitives, conventions, exemples |
+| [`docs/CODING-AGENT-CLI.md`](docs/CODING-AGENT-CLI.md) | Piloter un déploiement depuis un agent de coding via la CLI |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Installation sur l'OptiPlex, systemd, sauvegarde du profil |
 | [`docs/EXEMPLE-LEBONCOIN.md`](docs/EXEMPLE-LEBONCOIN.md) | Exemple de bout en bout : prérequis + prompt du coding agent pour un workflow leboncoin |
 | [`docs/NOTE-LEBONCOIN-PREPARATION.md`](docs/NOTE-LEBONCOIN-PREPARATION.md) | Journal de la préparation `dell` : profil Chrome authentifié, transfert, portabilité, sauvegarde |

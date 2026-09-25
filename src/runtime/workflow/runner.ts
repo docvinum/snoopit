@@ -222,6 +222,24 @@ export async function runWorkflow<T>(
   }
 
   // Whatever happened above, the run is closed and reported exactly once.
+  const circuitReason =
+    failure !== null
+      ? 'error'
+      : blocked !== null
+        ? 'blocked'
+        : authRequired !== null
+          ? 'auth-required'
+          : null;
+  if (circuitReason !== null && definition.circuitBreaker?.disableOn.includes(circuitReason)) {
+    store.jobs.setEnabled(job.id, false);
+    events.emit({
+      type: 'JOB_DISABLED',
+      level: 'error',
+      message: `Job désactivé par le coupe-circuit après ${circuitReason}`,
+      data: { reason: circuitReason },
+    });
+  }
+
   if (failure === null) {
     events.emit({
       type: 'RUN_COMPLETED',
