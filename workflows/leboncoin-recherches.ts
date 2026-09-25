@@ -48,9 +48,10 @@ const AD_CARD = '[data-qa-id="aditem_container"]';
 /**
  * Le navigateur affiche les filtres avant le contenu de la recherche. Attendre ce
  * contenu, et non les filtres, évite de lire une liste encore en cours de rendu.
- * Le compteur est présent même quand une recherche ne retourne aucune annonce.
+ * Le compteur est suivi de sa liste, ce qui exclut les autres titres de la page et
+ * couvre une recherche qui ne retourne aucune annonce.
  */
-const RESULTS_RENDERED = `${AD_CARD}, h2`;
+const RESULTS_RENDERED = `${AD_CARD}, h2 + ul`;
 
 /** Délai avant qu'une recherche revue revienne en file : une revue par jour environ. */
 const REVISIT_AFTER = '20h';
