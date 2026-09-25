@@ -169,6 +169,12 @@ describe('leboncoin-recherches — premier passage', () => {
       expect.stringContaining(`saved_id_view=${A}`),
       expect.stringContaining(`saved_id_view=${B}`),
     ]);
+    // La barre de filtres apparaît avant les résultats : attendre seulement cette
+    // barre ferait extraire une page encore vide sur le vrai site. Le compteur
+    // (liste vide) ou une carte confirme que la liste est rendue.
+    expect(
+      browser.journal.filter((entry) => entry.action === 'wait').map((entry) => entry.target),
+    ).toContain('[data-qa-id="aditem_container"], h2');
   });
 });
 

@@ -45,6 +45,12 @@ const SEARCH_LINK = 'a[title="Voir les résultats de recherche"]';
 /** Présente sur une page de résultats, y compris vide ; absente de `/my-searches`. */
 const RESULTS_READY = 'nav[aria-label="Filtrer les résultats de recherche"]';
 const AD_CARD = '[data-qa-id="aditem_container"]';
+/**
+ * Le navigateur affiche les filtres avant le contenu de la recherche. Attendre ce
+ * contenu, et non les filtres, évite de lire une liste encore en cours de rendu.
+ * Le compteur est présent même quand une recherche ne retourne aucune annonce.
+ */
+const RESULTS_RENDERED = `${AD_CARD}, h2`;
 
 /** Délai avant qu'une recherche revue revienne en file : une revue par jour environ. */
 const REVISIT_AFTER = '20h';
@@ -295,12 +301,13 @@ async function openResults(
   if (savedSearchId(page.url()) !== search.savedId) {
     throw new ReviewError(`le clic a mené à ${page.url()}, pas à la recherche attendue`);
   }
-  // Les cartes suivent la barre de filtres. Une recherche sans résultat n'en a aucune :
-  // ne pas les voir arriver n'est pas une erreur, le compteur tranchera.
+  // Les filtres arrivent avant les résultats. On attend donc une carte ou le
+  // compteur, jusqu'au timeout navigateur normal. Une liste vide possède le
+  // compteur et ne paie pas ce délai.
   try {
-    await page.waitForReady({ selector: AD_CARD, timeoutMs: 10_000 });
+    await page.waitForReady({ selector: RESULTS_RENDERED });
   } catch {
-    /* liste vide ou lente — voir `complete` plus bas */
+    throw new ReviewError('résultats non rendus après le clic');
   }
 }
 

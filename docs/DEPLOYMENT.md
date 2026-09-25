@@ -51,8 +51,12 @@ jour ne doit pas changer silencieusement le comportement du crawler.
 Vérification :
 
 ```bash
-sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js doctor \
-  --config /etc/snoopit/snoopit.config.yaml
+sudo -u snoopit /bin/bash -c '
+  set -a
+  . /etc/snoopit/snoopit.env
+  set +a
+  exec node /opt/snoopit/dist/src/cli/main.js "$@"
+' -- doctor --config /etc/snoopit/snoopit.config.yaml
 ```
 
 ---
@@ -69,6 +73,10 @@ si la configuration pointe ailleurs que sur `127.0.0.1`.
 nomme une variable d'environnement ; la valeur vit dans `/etc/snoopit/snoopit.env`,
 en `0640`, lu par systemd via `EnvironmentFile`. Le fichier de configuration peut
 donc être versionné et lu sans précaution.
+
+Les commandes lancées à la main avec `sudo -u snoopit` ne chargent pas
+`EnvironmentFile`. Pour un diagnostic ou un run manuel qui a besoin d'un secret,
+sourcez donc explicitement ce fichier comme dans les exemples ci-dessous.
 
 Les unités tournent sous un utilisateur système dédié, avec `ProtectSystem=strict` et
 `ReadWritePaths=/var/lib/snoopit` : le seul endroit inscriptible est l'état.
@@ -269,8 +277,19 @@ conformité.
 8. **Vérifier** :
 
    ```bash
-   sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js doctor --config /etc/snoopit/snoopit.config.yaml
-   sudo -u snoopit node /opt/snoopit/dist/src/cli/main.js run leboncoin-recherches --config /etc/snoopit/snoopit.config.yaml
+   sudo -u snoopit /bin/bash -c '
+     set -a
+     . /etc/snoopit/snoopit.env
+     set +a
+     exec node /opt/snoopit/dist/src/cli/main.js "$@"
+   ' -- doctor --config /etc/snoopit/snoopit.config.yaml
+
+   sudo -u snoopit /bin/bash -c '
+     set -a
+     . /etc/snoopit/snoopit.env
+     set +a
+     exec node /opt/snoopit/dist/src/cli/main.js "$@"
+   ' -- run leboncoin-recherches --config /etc/snoopit/snoopit.config.yaml
    ```
 
    `doctor` vérifie le jeton ; le run ouvre une fenêtre dans le Chrome snoopit, y
