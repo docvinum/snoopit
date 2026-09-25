@@ -19,7 +19,6 @@ describe('BudgetGuard — no budget', () => {
     guard.recordError(50);
     expect(guard.check('page')).toBeNull();
     expect(guard.ok('download')).toBe(true);
-    expect(() => guard.assertOk('llm')).not.toThrow();
   });
 
   it('reports unlimited remaining as null', () => {
@@ -65,16 +64,6 @@ describe('BudgetGuard — maxPages', () => {
 });
 
 describe('BudgetGuard — limits are per operation', () => {
-  it('does not let a zero LLM budget forbid page visits', () => {
-    // `maxLlmCalls: 0` is the correct way to declare "this workflow uses no LLM".
-    // Conflating limits would make that declaration forbid the first page visit.
-    const guard = new BudgetGuard({ maxLlmCalls: 0, maxPages: 10 });
-    expect(guard.ok('page')).toBe(true);
-    expect(guard.ok('download')).toBe(true);
-    expect(guard.ok('llm')).toBe(false);
-    expect(guard.check('llm')).toBe('max_llm_calls');
-  });
-
   it('does not let an exhausted byte budget forbid page visits', () => {
     const guard = new BudgetGuard({ maxDownloadBytes: 100, maxPages: 10 });
     guard.recordBytes(500);
@@ -86,7 +75,7 @@ describe('BudgetGuard — limits are per operation', () => {
     const clock = fakeClock();
     const guard = new BudgetGuard({ maxDuration: '1m', maxPages: 100 }, { now: clock.now });
     clock.advance(61_000);
-    for (const operation of ['page', 'download', 'llm'] as const) {
+    for (const operation of ['page', 'download'] as const) {
       expect(guard.check(operation)).toBe('max_duration');
     }
   });
@@ -99,7 +88,7 @@ describe('BudgetGuard — limits are per operation', () => {
   });
 
   it('checks only the global limits when no operation is named', () => {
-    const guard = new BudgetGuard({ maxPages: 1, maxLlmCalls: 0 });
+    const guard = new BudgetGuard({ maxPages: 1 });
     guard.recordPage();
     expect(guard.check()).toBeNull();
   });
@@ -136,14 +125,12 @@ describe('BudgetGuard — usage', () => {
     const guard = new BudgetGuard({ maxPages: 10 }, { now: clock.now });
     guard.recordPage(3);
     guard.recordBytes(2048);
-    guard.recordLlmCall();
     guard.recordError(2);
     clock.advance(5000);
 
     expect(guard.usage()).toEqual({
       pages: 3,
       downloadedBytes: 2048,
-      llmCalls: 1,
       errors: 2,
       elapsedMs: 5000,
     });
@@ -151,17 +138,16 @@ describe('BudgetGuard — usage', () => {
 });
 
 describe('effectiveBudget', () => {
-  const defaults = { maxPages: 100, maxDuration: '20m', maxLlmCalls: 3, maxErrors: 10 };
+  const defaults = { maxPages: 100, maxDuration: '20m', maxErrors: 10 };
 
   it('gives a workflow without a budget every default limit', () => {
     expect(effectiveBudget(null, defaults)).toEqual(defaults);
   });
 
   it('lets each limit a workflow names win, and inherits the others', () => {
-    expect(effectiveBudget({ maxPages: 12, maxLlmCalls: 0 }, defaults)).toEqual({
+    expect(effectiveBudget({ maxPages: 12 }, defaults)).toEqual({
       maxPages: 12,
       maxDuration: '20m',
-      maxLlmCalls: 0,
       maxErrors: 10,
     });
   });

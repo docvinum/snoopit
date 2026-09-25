@@ -290,7 +290,6 @@ async function openResults(
         goal: `Afficher les résultats de la recherche « ${search.titre} »`,
         expectedState: { selector: RESULTS_READY },
         allowedActions: ['close_overlay'],
-        maxLevel: 'L1',
       });
     } catch (error) {
       if (error instanceof RecoveryFailedError) {
@@ -438,7 +437,7 @@ export default workflow({
   description: 'Passe en revue les recherches enregistrées leboncoin et suit leurs annonces',
   // Une visite de /my-searches par recherche revue, plus la première. Les clics ne
   // comptent pas dans maxPages : c'est le lot (pagesPerRun, sinon 5) qui les borne.
-  budget: { maxPages: 12, maxDuration: '10m', maxErrors: 3, maxLlmCalls: 0 },
+  budget: { maxPages: 12, maxDuration: '10m', maxErrors: 3 },
 
   async run(ctx) {
     ctx.frontier.enqueueDueRevisits();

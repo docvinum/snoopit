@@ -19,20 +19,18 @@ import type { RunBudget } from '../../state/types.js';
 
 /** Stable identifiers, used in `stopReason` and in the report. */
 /** The kind of work being attempted. Each is bounded by its own limit. */
-export type BudgetOperation = 'page' | 'download' | 'llm';
+export type BudgetOperation = 'page' | 'download';
 
 /**
  * `max_pages` bounds *units of crawl work*: an HTML page visit and a collected
  * document both count as one. Both are a network fetch and a unit of progress, and
  * counting only HTML visits would leave a `collect` workflow effectively unbounded.
  */
-export type BudgetLimitName =
-  'max_pages' | 'max_duration' | 'max_download_bytes' | 'max_llm_calls' | 'max_errors';
+export type BudgetLimitName = 'max_pages' | 'max_duration' | 'max_download_bytes' | 'max_errors';
 
 export interface BudgetUsage {
   readonly pages: number;
   readonly downloadedBytes: number;
-  readonly llmCalls: number;
   readonly errors: number;
   readonly elapsedMs: number;
 }
@@ -86,7 +84,6 @@ export interface BudgetGuardOptions {
 export class BudgetGuard {
   private pages = 0;
   private downloadedBytes = 0;
-  private llmCalls = 0;
   private errors = 0;
 
   private readonly startedAt: number;
@@ -113,10 +110,6 @@ export class BudgetGuard {
     this.downloadedBytes += bytes;
   }
 
-  recordLlmCall(count = 1): void {
-    this.llmCalls += count;
-  }
-
   recordError(count = 1): void {
     this.errors += count;
   }
@@ -125,7 +118,6 @@ export class BudgetGuard {
     return {
       pages: this.pages,
       downloadedBytes: this.downloadedBytes,
-      llmCalls: this.llmCalls,
       errors: this.errors,
       elapsedMs: this.now() - this.startedAt,
     };
@@ -137,9 +129,7 @@ export class BudgetGuard {
    * The limit that forbids this operation, or `null`.
    *
    * Limits are *per operation*, not global: a page visit is bounded by `maxPages`,
-   * a download by `maxDownloadBytes`, an LLM call by `maxLlmCalls`. Conflating them
-   * makes `maxLlmCalls: 0` — the correct way to declare "this workflow uses no LLM"
-   * — forbid the very first page visit, which is nonsense.
+   * a download by `maxDownloadBytes`.
    *
    * Duration and errors are the exception: they bound the run as a whole and so
    * apply to every operation.
@@ -163,10 +153,6 @@ export class BudgetGuard {
         return budget.maxDownloadBytes !== undefined &&
           this.downloadedBytes >= budget.maxDownloadBytes
           ? 'max_download_bytes'
-          : null;
-      case 'llm':
-        return budget.maxLlmCalls !== undefined && this.llmCalls >= budget.maxLlmCalls
-          ? 'max_llm_calls'
           : null;
       default:
         return null;
@@ -204,8 +190,6 @@ export class BudgetGuard {
         return this.now() - this.startedAt;
       case 'max_download_bytes':
         return this.downloadedBytes;
-      case 'max_llm_calls':
-        return this.llmCalls;
       case 'max_errors':
         return this.errors;
     }
@@ -221,8 +205,6 @@ export class BudgetGuard {
         return this.maxDurationMs ?? Number.POSITIVE_INFINITY;
       case 'max_download_bytes':
         return budget.maxDownloadBytes ?? Number.POSITIVE_INFINITY;
-      case 'max_llm_calls':
-        return budget.maxLlmCalls ?? Number.POSITIVE_INFINITY;
       case 'max_errors':
         return budget.maxErrors ?? Number.POSITIVE_INFINITY;
     }

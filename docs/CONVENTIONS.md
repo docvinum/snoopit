@@ -55,9 +55,9 @@ Trois règles non négociables, dérivées de `docs/ARCHITECTURE.md` :
    évalué dans la page est du vrai code navigateur. Pour qu'elle ne fuie pas, une
    règle ESLint `no-restricted-globals` interdit `window`, `document`, `navigator`
    et `location` partout **sauf** dans `src/runtime/browser/{cdp,fake}.ts`.
-3. **Aucun secret dans un objet de configuration.** La clé LLM est désignée par le
-   *nom* d'une variable d'environnement (`llm.apiKeyEnv`), lue à la demande par
-   `llmApiKey()`. Un `apiKey` en clair dans le YAML est rejeté par le schéma.
+3. **Aucun secret d'agent dans la configuration.** Les identifiants d'un agent ou
+   d'un modèle appartiennent au processus externe qui appelle snoopit ; le runtime
+   ne les lit jamais.
 
 ---
 
@@ -128,7 +128,7 @@ Un commit par lot cohérent : `type: sujet` (`feat:`, `fix:`, `docs:`, `test:`,
 Repris de `docs/MVP.md` §5, à vérifier à chaque revue :
 
 1. Un workflow importe du CDP ou de Playwright → l'abstraction a fui.
-2. Un run nominal appelle le LLM → dérive vers le pattern de l'upstream.
+2. Le runtime appelle un LLM → la frontière avec l'agent externe est rompue.
 3. Un test de logique métier exige un vrai navigateur → mauvais placement.
 4. De l'état vit ailleurs que dans SQLite → D4 enfreint.
 5. La reprise dépend d'un numéro de page → spec §8 enfreint.

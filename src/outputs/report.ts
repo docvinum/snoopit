@@ -122,7 +122,6 @@ export function buildReport(input: ReportInput): Report {
     `| Pages découvertes | ${String(run.counters.pagesDiscovered)} |`,
     `| Artifacts créés | ${String(run.counters.artifactsCreated)} |`,
     `| Octets téléchargés | ${formatBytes(run.counters.downloadedBytes)} |`,
-    `| Appels LLM | ${String(run.counters.llmCalls)} |`,
     `| Erreurs | ${String(run.counters.errorCount)} |`,
     '',
   ];

@@ -95,7 +95,6 @@ describe('leboncoin-recherches — premier passage', () => {
     const outcome = await run();
 
     expect(outcome.run.stopReason).toBe('done');
-    expect(outcome.run.counters.llmCalls).toBe(0);
     // 4 annonces distinctes dans A (dont une « remontée » en double), 2 dans B dont
     // une déjà vue dans A : 5 nouvelles, pas 7.
     expect(outcome.result).toEqual({
@@ -282,7 +281,6 @@ describe("leboncoin-recherches — quand il faut s'arrêter", () => {
     const outcome = await run();
 
     expect(outcome.run.stopReason).toBe('blocked:captcha');
-    expect(outcome.run.counters.llmCalls).toBe(0);
     // A a été revue avant le blocage ; B retourne en file pour un prochain run.
     expect(store.items.list(job.id, { kind: 'annonce' })).toHaveLength(4);
     const b = store.frontier.get(

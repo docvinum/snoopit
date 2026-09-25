@@ -89,7 +89,6 @@ describe('snoopit run through the extension', () => {
       const run = store.runs.latestForJob('example-catalogue');
       expect(run?.status).toBe('completed');
       expect(run?.counters.artifactsCreated).toBeGreaterThan(0);
-      expect(run?.counters.llmCalls).toBe(0);
     } finally {
       store.close();
     }

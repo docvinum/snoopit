@@ -13,7 +13,7 @@ export default workflow({
   name: 'example-publications',
   type: 'collect',
   description: 'Collecte les nouvelles publications PDF et conserve leur provenance',
-  budget: { maxPages: 50, maxDuration: '10m', maxDownloadBytes: 50_000_000, maxLlmCalls: 0 },
+  budget: { maxPages: 50, maxDuration: '10m', maxDownloadBytes: 50_000_000 },
 
   async run(ctx) {
     const startUrl =

@@ -18,7 +18,6 @@ const RUN: Run = {
     pagesDiscovered: 34,
     artifactsCreated: 3,
     downloadedBytes: 2_097_152,
-    llmCalls: 0,
     errorCount: 1,
   },
   reportPath: null,
@@ -72,7 +71,6 @@ describe('buildReport', () => {
     const parsed: unknown = JSON.parse(buildReport(input()).json);
     expect(parsed).toMatchObject({
       run: { id: RUN.id, status: 'completed', stopReason: 'done' },
-      counters: { pagesVisited: 12, llmCalls: 0 },
     });
   });
 

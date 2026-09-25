@@ -1,7 +1,6 @@
 # snoopit configuration — copy to `snoopit.config.yaml` and adjust.
 #
-# This file is safe to commit: it contains no secret. The LLM API key is referenced
-# by the *name* of an environment variable, never by its value.
+# This file is safe to commit: snoopit holds no agent credentials.
 
 dataDir: ./data
 
@@ -26,15 +25,6 @@ browser:
   defaultProfile: desktop-chrome
   navigationTimeout: 30s
 
-llm:
-  # Any OpenAI-compatible endpoint. Used only for L2/L3 recovery, never nominally —
-  # a run that meets no surprise makes zero calls here. With no key set, recovery
-  # stops at L1, which is a supported configuration rather than a degraded one.
-  provider: openrouter
-  baseUrl: https://openrouter.ai/api/v1
-  model: anthropic/claude-sonnet-4.6
-  apiKeyEnv: SNOOPIT_LLM_API_KEY
-
 scheduler:
   # Zone schedule windows are read in, for jobs whose schedule names none.
   # Left at UTC, a 08:00-10:00 window on a machine in France fires 1-2 hours late.
@@ -42,9 +32,8 @@ scheduler:
 
 # Limits applied to every run, limit by limit, wherever the workflow's own budget
 # is silent: a workflow declaring only `maxPages` still gets the duration, error and
-# LLM limits below. A limit the workflow names always wins.
+# error limits below. A limit the workflow names always wins.
 defaultBudget:
   maxPages: 100
   maxDuration: 20m
-  maxLlmCalls: 3
   maxErrors: 10

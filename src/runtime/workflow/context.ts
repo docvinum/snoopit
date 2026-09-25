@@ -38,7 +38,6 @@ import {
   type RecoverOptions,
   type RecoveryOutcome,
 } from '../recovery/recover.js';
-import type { LlmProvider } from '../recovery/llm/provider.js';
 import type {
   CollectOptions,
   CollectResult,
@@ -63,8 +62,6 @@ export interface ContextOptions {
   readonly budget: BudgetGuard;
   /** Hard cap on frontier entries this run may claim, from `pagesPerRun`. */
   readonly pagesPerRun?: number | null;
-  /** Absent means recovery stops at L1 — a valid, fully supported configuration. */
-  readonly llm?: LlmProvider | null;
 }
 
 const DEFAULT_LEASE_MS = 15 * 60_000;
@@ -85,7 +82,6 @@ export class RunContext implements WorkflowContext {
   private readonly dataDir: string;
   private readonly leaseMs: number;
   private readonly pagesPerRun: number | null;
-  private readonly llm: LlmProvider | null;
   /** Frontier entries claimed so far, so `pagesPerRun` bounds the whole run. */
   private claimed = 0;
 
@@ -99,7 +95,6 @@ export class RunContext implements WorkflowContext {
     this.leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
     this.budget = options.budget;
     this.pagesPerRun = options.pagesPerRun ?? null;
-    this.llm = options.llm ?? null;
   }
 
   private canonical(url: string, base?: string): string {
@@ -553,22 +548,13 @@ export class RunContext implements WorkflowContext {
     });
 
     try {
-      const outcome = await recover(page, options, {
-        llm: this.llm,
-        // Each model call is checked against the run's LLM budget before it is made,
-        // so a recovery loop cannot quietly become the run's main cost.
-        onLlmCall: () => {
-          this.budget.assertOk('llm');
-          this.budget.recordLlmCall();
-          this.store.runs.increment(this.run.id, 'llmCalls');
-        },
-      });
+      const outcome = await recover(page, options);
 
       this.events.emit({
         type: 'RECOVERY_SUCCEEDED',
         url: page.url(),
         message: `${options.goal} — ${outcome.level ?? 'already in state'}`,
-        data: { level: outcome.level, llmCalls: outcome.llmCalls, steps: outcome.steps },
+        data: { level: outcome.level, steps: outcome.steps },
       });
       return outcome;
     } catch (error) {

@@ -21,8 +21,7 @@ Group=snoopit
 Environment=NODE_ENV=production
 WorkingDirectory=/opt/snoopit
 
-# The LLM key lives here, readable only by the service user. It is never in the
-# config file, which names the variable rather than holding the value.
+# The extension pairing token lives here, readable only by the service user.
 EnvironmentFile=-/etc/snoopit/snoopit.env
 
 ExecStart=/usr/bin/node /opt/snoopit/dist/src/cli/main.js tick --config /etc/snoopit/snoopit.config.yaml

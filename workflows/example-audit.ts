@@ -2,7 +2,7 @@
  * Workflow `audit` : vérifier qu'un site répond correctement.
  *
  * Illustre le chemin nominal : navigation déterministe, checks explicites, rapport.
- * Aucun appel LLM — un run normal n'en fait aucun.
+ * Aucun modèle n'est appelé : le runtime est entièrement déterministe.
  */
 
 import { workflow } from '../src/runtime/workflow/types.js';
@@ -19,14 +19,14 @@ export default workflow({
   name: 'example-audit',
   type: 'audit',
   description: "Vérifie les liens et les images d'un site de démonstration",
-  budget: { maxPages: 20, maxDuration: '5m', maxLlmCalls: 0, maxErrors: 10 },
+  budget: { maxPages: 20, maxDuration: '5m', maxErrors: 10 },
 
   async run(ctx) {
     const startUrl = process.env['SNOOPIT_AUDIT_START_URL'] ?? 'http://127.0.0.1:8080/index.html';
 
     const { page, navigation } = await ctx.visit(startUrl, { waitFor: '.publication-list' });
 
-    // Une bannière cookies se ferme par heuristique déterministe, pas par un LLM.
+    // Une bannière cookies se ferme par heuristique déterministe.
     const banner = await page.query('#cookie-banner');
     if (banner !== null && banner.view.display !== 'none') {
       await page.click('#accept-cookies');

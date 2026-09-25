@@ -32,8 +32,8 @@ flowchart TD
   end
 
   subgraph OVR["ctx.dismissOverlays / ctx.recover"]
-    o_dismiss["dismissOverlays(page) → recovery/heuristics.ts:233 (sans LLM)"]
-    o_recover["recover(page, opts) — context.ts:348<br/>event RECOVERY_STARTED → recovery/recover.ts:216 (voir recover.mmd)<br/>onLlmCall: budget.assertOk('llm') + recordLlmCall + runs.increment(llmCalls)"]
+    o_dismiss["dismissOverlays(page) → recovery/heuristics.ts (déterministe)"]
+    o_recover["recover(page, opts) → event RECOVERY_STARTED<br/>heuristiques, puis RecoveryFailedError (voir recover.mmd)"]
   end
 
   subgraph ART["ctx.artifacts.*"]

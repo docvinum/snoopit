@@ -12,7 +12,6 @@ import { listWorkflows, loadWorkflow } from '../runtime/workflow/load.js';
 import { runWorkflow } from '../runtime/workflow/runner.js';
 import { dueJobs, evaluateJobs } from '../scheduler/scheduler.js';
 import { runDueJobs } from '../scheduler/tick.js';
-import { providerFromConfig } from '../runtime/recovery/llm/from-config.js';
 import { exitCodeFor, formatChecks, runDoctor } from './doctor.js';
 import { parseDuration } from '../util/time.js';
 import { canonicalizeUrl } from '../runtime/navigation/canonical.js';
@@ -164,15 +163,11 @@ async function cmdRun(
     });
 
     const browser = await connectBrowser(loaded.config);
-    const { provider, reason } = providerFromConfig(loaded.config);
-    if (reason !== null) console.error(`[llm] ${reason}`);
-
     try {
       const outcome = await runWorkflow(definition, {
         store,
         job,
         browser,
-        llm: provider,
         dataDir: loaded.paths.dataDir,
         defaultBudget: loaded.config.defaultBudget,
         trigger: 'manual',
@@ -235,15 +230,11 @@ async function cmdTick(
       return 0;
     }
 
-    const { provider, reason } = providerFromConfig(loaded.config);
-    if (reason !== null) console.error(`[llm] ${reason}`);
-
     const { failures } = await runDueJobs(due, {
       store,
       loadWorkflow: (name) => loadWorkflow(name),
       connect: () => connectBrowser(loaded.config),
       runOptions: {
-        llm: provider,
         dataDir: loaded.paths.dataDir,
         defaultBudget: loaded.config.defaultBudget,
         heartbeatMs: parseDuration(loaded.config.runs.heartbeatInterval),

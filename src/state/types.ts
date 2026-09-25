@@ -39,7 +39,6 @@ export interface RunBudget {
   /** Human duration, e.g. `20m`. Parsed with `parseDuration`. */
   readonly maxDuration?: string;
   readonly maxDownloadBytes?: number;
-  readonly maxLlmCalls?: number;
   readonly maxErrors?: number;
 }
 
@@ -76,7 +75,6 @@ export interface RunCounters {
   readonly pagesDiscovered: number;
   readonly artifactsCreated: number;
   readonly downloadedBytes: number;
-  readonly llmCalls: number;
   readonly errorCount: number;
 }
 
@@ -85,7 +83,6 @@ export const ZERO_COUNTERS: RunCounters = {
   pagesDiscovered: 0,
   artifactsCreated: 0,
   downloadedBytes: 0,
-  llmCalls: 0,
   errorCount: 0,
 };
 

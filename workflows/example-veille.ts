@@ -15,7 +15,7 @@ export default workflow({
   name: 'example-veille',
   type: 'audit',
   description: 'Visite des pages suivies et signale celles qui ont changé',
-  budget: { maxPages: 30, maxDuration: '10m', maxLlmCalls: 0 },
+  budget: { maxPages: 30, maxDuration: '10m' },
 
   async run(ctx) {
     const startUrl = process.env['SNOOPIT_VEILLE_URL'] ?? 'http://127.0.0.1:8080/index.html';

@@ -200,7 +200,7 @@ export interface WorkflowContext {
   ): Promise<ExtractedRecord<F>[]>;
 
   /**
-   * Dismisses recognised overlays deterministically. No LLM, ever.
+   * Dismisses recognised overlays deterministically.
    *
    * Cheap and safe to call before any interaction — the `beforeAction` pattern of
    * spec §14.

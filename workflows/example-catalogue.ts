@@ -16,7 +16,7 @@ export default workflow({
   name: 'example-catalogue',
   type: 'collect',
   description: 'Collecte un catalogue volumineux par tranches, reprenable',
-  budget: { maxPages: 10, maxDuration: '10m', maxLlmCalls: 0 },
+  budget: { maxPages: 10, maxDuration: '10m' },
 
   async run(ctx) {
     const startUrl = process.env['SNOOPIT_CATALOGUE_URL'] ?? 'http://127.0.0.1:8080/catalogue.html';

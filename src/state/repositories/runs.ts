@@ -19,7 +19,6 @@ interface RunRow {
   pages_discovered: number;
   artifacts_created: number;
   downloaded_bytes: number;
-  llm_calls: number;
   error_count: number;
   report_path: string | null;
 }
@@ -30,7 +29,6 @@ const COUNTER_COLUMNS: Record<RunCounterName, string> = {
   pagesDiscovered: 'pages_discovered',
   artifactsCreated: 'artifacts_created',
   downloadedBytes: 'downloaded_bytes',
-  llmCalls: 'llm_calls',
   errorCount: 'error_count',
 };
 
@@ -51,7 +49,6 @@ function toRun(row: RunRow): Run {
       pagesDiscovered: row.pages_discovered,
       artifactsCreated: row.artifacts_created,
       downloadedBytes: row.downloaded_bytes,
-      llmCalls: row.llm_calls,
       errorCount: row.error_count,
     },
     reportPath: row.report_path,

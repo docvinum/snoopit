@@ -4,7 +4,7 @@
  * Cookie banners, consent modals, newsletter popups and soft login walls are the
  * overwhelmingly common reason a script finds the page it expected hidden behind
  * something. They are also entirely predictable, which is why they must never reach
- * the LLM: spending a model call on "click Accept" is the pattern this project was
+ * a model: asking a model to "click Accept" is the pattern this project was
  * built to avoid.
  *
  * The classification is pure — it takes element snapshots and returns candidates —
@@ -224,7 +224,7 @@ export interface DismissOptions {
 }
 
 /**
- * Dismisses the overlays it recognises, deterministically and without an LLM.
+ * Dismisses the overlays it recognises deterministically.
  *
  * Returns what it clicked so the run report can say exactly what was done to the
  * page — a dismissal that happens silently is indistinguishable from a site that

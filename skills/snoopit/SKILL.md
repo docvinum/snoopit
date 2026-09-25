@@ -21,7 +21,7 @@ export default workflow({
   name: 'mon-workflow',
   type: 'collect',                 // 'collect' | 'audit'
   description: 'Une phrase.',
-  budget: { maxPages: 50, maxDuration: '20m', maxLlmCalls: 0 },
+  budget: { maxPages: 50, maxDuration: '20m' },
 
   async run(ctx) {
     // ...
@@ -47,7 +47,7 @@ async run(ctx) {
 
   // ── Phase 1 : découverte ────────────────────────────────────────────────
   const { page } = await ctx.visit(startUrl, { waitFor: '.publication-list' });
-  await ctx.dismissOverlays(page);          // bannière cookies, modale — sans LLM
+  await ctx.dismissOverlays(page);          // bannière cookies, modale — déterministe
 
   const items = await ctx.extract(page, {
     selector: '.publication',
@@ -199,14 +199,13 @@ await ctx.recover(page, {
   goal: 'Accéder à la liste des publications',
   expectedState: { selector: '.publication-list' },
   allowedActions: ['click', 'scroll', 'close_overlay'],
-  maxSteps: 4,
 });
 ```
 
 Un **garde**, pas une étape : rend la main immédiatement si l'état est déjà là.
-Escalade L1 (heuristiques, sans LLM) → L2 (LLM/DOM) → L3 (LLM/screenshot) → L4
-(échec explicite). Sans clé API, s'arrête à L1 — ce qui suffit dans l'immense
-majorité des cas.
+Il applique seulement les heuristiques déterministes (fermeture d'overlays, scroll),
+puis échoue explicitement si l'état reste inattendu. Un agent externe peut alors lire
+le rapport et décider d'une action suivante.
 
 Pour une simple bannière, `ctx.dismissOverlays(page)` suffit.
 
@@ -238,8 +237,8 @@ trouverait jamais rien. Travail atteint par un clic plutôt que par `visit` :
 1. **Deux phases.** Découverte puis collecte. C'est ce qui permet reprise,
    priorisation et déduplication.
 2. **Fermez vos pages.** `await page.close()`, dans un `finally`.
-3. **`maxLlmCalls: 0` quand c'est vrai.** Cela documente l'intention *et* la fait
-   respecter.
+3. **Déclarez des budgets utiles au site.** `maxPages`, `maxDuration`,
+   `maxDownloadBytes` et `maxErrors` bornent un run.
 4. **Ne forcez jamais un clic.** `click()` refuse un élément invisible, `inert`,
    `aria-hidden` ou désactivé. Le refus signale presque toujours que le workflow a
    dérivé, pas que le garde-fou a tort.
@@ -259,7 +258,7 @@ trouverait jamais rien. Travail atteint par un clic plutôt que par `visit` :
 ## 5. Budgets et planification
 
 ```ts
-budget: { maxPages: 50, maxDuration: '20m', maxDownloadBytes: 500_000_000, maxLlmCalls: 0 }
+budget: { maxPages: 50, maxDuration: '20m', maxDownloadBytes: 500_000_000 }
 ```
 
 `maxPages` compte les **unités de travail** : une visite et un document collecté

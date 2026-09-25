@@ -4,10 +4,8 @@ import { isValidTimeZone } from '../util/time.js';
 /**
  * Configuration schema.
  *
- * One rule shapes this file: **no secret is ever a config value.** The LLM API key
- * is referenced by the *name of an environment variable* (`apiKeyEnv`), never by its
- * value, so a config file can be committed without redaction. The upstream project
- * stored its key in browser storage in plain text; this is the deliberate opposite.
+ * This configuration describes snoopit's deterministic runtime. Agent credentials
+ * belong to the external caller, never to snoopit.
  */
 
 const durationPattern = /^\d+(\.\d+)?(ms|s|m|h|d)(\d+(\.\d+)?(ms|s|m|h|d))*$/;
@@ -21,7 +19,6 @@ export const budgetSchema = z
     maxPages: z.number().int().positive().optional(),
     maxDuration: z.string().regex(durationPattern, 'expected a duration like "20m"').optional(),
     maxDownloadBytes: z.number().int().positive().optional(),
-    maxLlmCalls: z.number().int().nonnegative().optional(),
     maxErrors: z.number().int().nonnegative().optional(),
   })
   .strict();
@@ -96,18 +93,6 @@ export const configSchema = z
       .strict()
       .default({}),
 
-    llm: z
-      .object({
-        /** Any OpenAI-compatible endpoint. The business layer never names a vendor. */
-        provider: z.string().default('openrouter'),
-        baseUrl: z.string().url().default('https://openrouter.ai/api/v1'),
-        model: z.string().default('anthropic/claude-sonnet-4.6'),
-        /** Name of the env var holding the key. Never the key itself. */
-        apiKeyEnv: z.string().default('SNOOPIT_LLM_API_KEY'),
-      })
-      .strict()
-      .default({}),
-
     runs: z
       .object({
         /** How often a live run refreshes its heartbeat. */
@@ -144,7 +129,6 @@ export const configSchema = z
     defaultBudget: budgetSchema.default({
       maxPages: 100,
       maxDuration: '20m',
-      maxLlmCalls: 3,
       maxErrors: 10,
     }),
   })

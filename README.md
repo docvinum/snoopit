@@ -12,8 +12,8 @@ une tâche via l'API, transforme cette exploration en workflow déterministe, pu
 laisse `snoopit` le rejouer et le maintenir dans le temps.
 
 Ce n'est pas un agent LLM qui décide de chaque clic. La navigation est **déterministe
-et scriptable** ; un LLM n'intervient qu'en **mécanisme de récupération**, lorsqu'un
-état inattendu apparaît.
+et scriptable**. Un agent externe peut appeler la CLI ou l'API de snoopit, lire ses
+rapports et choisir le prochain workflow ; snoopit n'appelle jamais de modèle.
 
 ```text
 Coding agent  ->  workflows versionnés  ->  Browser Runtime  ->  Chrome  ->  sites web
@@ -22,7 +22,6 @@ Coding agent  ->  workflows versionnés  ->  Browser Runtime  ->  Chrome  ->  si
                                              +-- Scheduler
                                              +-- Budgets & Policies
                                              +-- Artifacts & Rapports
-                                             +-- LLM Recovery (exception)
 ```
 ---
 
@@ -53,7 +52,7 @@ Snoopit reste responsable de la navigation, de la collecte, de la mémoire de vi
 | 2 | Runtime navigateur minimal | ✅ terminé |
 | 3 | Premier workflow de bout en bout | ✅ terminé |
 | 4 | Scheduler, reprise, budgets | ✅ terminé — **jalon MVP** |
-| 5 | Recovery (heuristiques, puis LLM) | ✅ terminé |
+| 5 | Recovery déterministe (heuristiques) | ✅ terminé |
 | 6 | Déploiement et documentation agent | ✅ terminé |
 
 ---
@@ -110,7 +109,7 @@ de dernière visite et de collecte, hash de contenu, statut, fichiers produits.
 ```ts
 export default workflow({
   name: 'example-publications',
-  budget: { maxPages: 50, maxLlmCalls: 0 },
+  budget: { maxPages: 50 },
 
   async run(ctx) {
     // Découverte
@@ -150,10 +149,9 @@ Exemples complets : [`workflows/`](workflows/).
 
 1. **La source de vérité est SQLite, jamais le navigateur.** Chrome est un exécutant
    remplaçable ; l'état lui survit.
-2. **Le fonctionnement nominal est déterministe** — DOM, sélecteurs, navigation.
-   Un run normal effectue zéro appel LLM, et `llmCalls` figure dans chaque rapport
-   pour le prouver. Le LLM n'intervient qu'en récupération, après échec des
-   heuristiques déterministes.
+2. **Le fonctionnement est déterministe** — DOM, sélecteurs, navigation et recovery
+   par heuristiques. Les agents externes consomment les rapports et pilotent snoopit
+   par son interface, sans être appelés par lui.
 3. **La reprise après interruption est une exigence de premier ordre**, pas une
    optimisation.
 4. **Découverte et collecte sont séparées**, ce qui permet reprise, priorisation,
@@ -163,8 +161,7 @@ Exemples complets : [`workflows/`](workflows/).
    contournement n'est conçu ni accepté.
 
 Priorités, dans l'ordre : fiabilité, simplicité, reprise après interruption,
-déterminisme, observabilité, maintenabilité par coding agent, extensibilité,
-utilisation minimale du LLM.
+déterminisme, observabilité, maintenabilité par coding agent et extensibilité.
 
 ---
 

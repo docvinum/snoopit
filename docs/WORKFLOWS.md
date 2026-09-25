@@ -22,7 +22,7 @@ export default workflow({
   name: 'nom-du-workflow',
   type: 'collect',              // ou 'audit'
   description: 'Une phrase.',
-  budget: { maxPages: 50, maxDuration: '10m', maxLlmCalls: 0 },
+  budget: { maxPages: 50, maxDuration: '10m' },
 
   async run(ctx) {
     // ...
@@ -203,13 +203,13 @@ await ctx.artifacts.screenshot(page, 'accueil.png');
 Un workflow déclare son budget ; le runtime l'applique.
 
 ```ts
-budget: { maxPages: 50, maxDuration: '20m', maxDownloadBytes: 500_000_000, maxLlmCalls: 0 }
+budget: { maxPages: 50, maxDuration: '20m', maxDownloadBytes: 500_000_000 }
 ```
 
 Les limites que le workflow ne nomme pas viennent de `defaultBudget` dans la
-configuration (défaut : 100 pages, 20 min, 3 appels LLM, 10 erreurs), **limite par
-limite** : `{ maxPages: 12 }` garde la durée, les erreurs et les appels LLM par
-défaut. Une limite nommée par le workflow l'emporte toujours ; un workflow sans
+configuration (défaut : 100 pages, 20 min, 10 erreurs), **limite par limite** :
+`{ maxPages: 12 }` garde la durée et les erreurs par défaut. Une limite nommée par
+le workflow l'emporte toujours ; un workflow sans
 budget reçoit toutes les limites par défaut. Le rapport montre le budget
 effectivement appliqué.
 
@@ -301,35 +301,25 @@ await ctx.recover(page, {
   goal: 'Accéder à la liste des publications',
   expectedState: { selector: '.publication-list' },
   allowedActions: ['click', 'scroll', 'close_overlay'],
-  maxSteps: 4,
 });
 ```
 
-### Les niveaux
+### Ce que fait le recovery
 
 ```text
 L0  votre script                 — le chemin nominal
-L1  heuristiques déterministes   — overlays, scroll. Aucun appel LLM.
-L2  LLM sur un digest DOM        — texte seul, contexte minimal
-L3  LLM + screenshot             — dernier recours, le plus coûteux
+L1  heuristiques déterministes   — overlays, scroll
 L4  échec explicite              — RecoveryFailedError, journalisé et rapporté
 ```
 
-L'escalade est **monotone et budgétée** : elle s'arrête dès que l'état attendu
-apparaît. Un run qui ne rencontre pas de surprise n'atteint jamais L2, et `llmCalls`
-dans le rapport le prouve.
-
-Sans provider configuré, le recovery s'arrête à L1 — configuration parfaitement
-valide, qui couvre l'écrasante majorité des obstacles.
+Elle s'arrête dès que l'état attendu apparaît. Si L1 ne suffit pas, snoopit échoue
+explicitement : l'agent externe qui a demandé le run peut lire le rapport et décider
+quoi faire ensuite.
 
 ### Garde-fous
 
-- Le modèle **choisit parmi** les contrôles qu'on lui a montrés — tous jugés
-  interactables par un humain. Un sélecteur inventé est refusé.
 - Une action hors de `allowedActions` est refusée.
-- Une réponse illisible est une étape échouée, jamais un crash.
-- Un provider en panne dégrade en L4, pas en erreur de transport opaque.
-- Chaque appel est décompté de `maxLlmCalls` **avant** d'être émis.
+- Les heuristiques ne ciblent que des contrôles jugés interactables par un humain.
 
 ### Overlays seuls
 
@@ -337,7 +327,7 @@ Quand vous savez qu'il n'y a qu'une bannière à écarter, inutile de passer par
 recovery :
 
 ```ts
-await ctx.dismissOverlays(page);   // déterministe, jamais de LLM
+await ctx.dismissOverlays(page);   // déterministe
 ```
 
 Les heuristiques ne cliquent jamais un contrôle qui engage — « Se connecter »,
@@ -365,9 +355,8 @@ Aucun contournement n'est à écrire, et aucun ne sera accepté en revue.
 1. **Découverte et collecte sont deux phases.** Alimentez la frontier, puis
    consommez-la. C'est ce qui rend possibles la reprise, la priorisation et la
    déduplication (spec §15).
-2. **Pas de LLM dans le chemin nominal.** Un run normal fait zéro appel. Déclarez
-   `maxLlmCalls: 0` quand c'est vrai — cela documente l'intention et la fait
-   respecter.
+2. **Le runtime est déterministe.** Snoopit ne contacte aucun modèle ; un agent
+   externe peut consommer ses rapports et appeler un workflow suivant.
 3. **N'interagissez qu'avec ce qu'un humain peut atteindre.** `click()` refuse un
    élément invisible, `inert`, `aria-hidden` ou désactivé. Ne forcez pas
    (`force: true`) : le refus signale presque toujours que le workflow a dérivé.
@@ -376,10 +365,7 @@ Aucun contournement n'est à écrire, et aucun ne sera accepté en revue.
    et on continue ; le run reste vert, le problème apparaît dans le rapport.
 6. **Face à un blocage, arrêtez.** Le runtime le détecte dès `ctx.visit` et le
    rapporte (cf. §5) ; ne le contournez pas.
-7. **Ne forcez jamais un appel LLM là où une heuristique suffit.** Déclarez
-   `maxLlmCalls: 0` quand le workflow doit s'en passer : cela documente l'intention
-   *et* la fait respecter.
-8. **Ne dépendez pas d'un numéro de page.** L'identité est l'URL canonique.
+7. **Ne dépendez pas d'un numéro de page.** L'identité est l'URL canonique.
 
 ---
 

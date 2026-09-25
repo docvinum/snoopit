@@ -7,7 +7,7 @@
  *
  * It is deliberately one-way. Nothing here solves a challenge, retries around a
  * block, rotates an identity, or hides a pattern — and no such thing belongs here.
- * Detection escalates to a clean stop, never to the LLM: asking a model to get past
+ * Detection escalates to a clean stop: asking a model to get past
  * a CAPTCHA is precisely the behaviour this project refuses.
  *
  * The classifier is pure, so the whole policy is visible in one file and testable

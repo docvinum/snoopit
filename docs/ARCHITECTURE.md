@@ -149,10 +149,12 @@ Conformément à §15 de la spec. La découverte alimente `crawl_frontier` ; la 
 la consomme. Les deux phases sont reprenables indépendamment, ce qui rend possibles la
 priorisation, la déduplication, le contrôle de budget et le retraitement ciblé.
 
-### D6 — Le LLM est un mécanisme de récupération, jamais un pilote
+### D6 — L'agent est externe au runtime
 
-Un run nominal effectue **zéro appel LLM**. C'est une métrique suivie, pas un
-espoir. Le budget `max_llm_calls` par défaut est bas (3).
+Snoopit n'appelle jamais de modèle. Il exécute des workflows déterministes, produit
+des rapports et expose son interface au processus externe qui peut, lui, être un
+agent LLM. Cette séparation garde les secrets et les décisions de l'agent hors du
+runtime de navigation.
 
 ### D7 — Blocage ⇒ arrêt
 
@@ -176,7 +178,7 @@ snoopit/
       navigation/     waitForReady, canonicalisation URL, redirections, isHumanInteractable
       extraction/     extractAll, mapping de champs, text/markdown, hash de contenu
       downloads/      pipeline de téléchargement, provenance, dédup par hash
-      recovery/       niveaux L0..L4, heuristiques, overlays, providers LLM
+      recovery/       heuristiques, overlays, échec explicite
       budget/         garde de budget de run
       events/         bus d'événements de domaine, écriture JSONL
       workflow/       workflow(), contexte d'exécution, runner
@@ -261,12 +263,12 @@ Volontairement non figée (§4 de la spec). Point de départ :
 export default workflow({
   name: "example-publications",
 
-  budget: { maxPages: 100, maxDuration: "20m", maxLlmCalls: 3 },
+  budget: { maxPages: 100, maxDuration: "20m" },
 
   async run(ctx) {
     const page = await ctx.browser.open("https://example.com/publications");
     await page.waitForReady();
-    await page.dismissCommonOverlays();          // heuristique L1, sans LLM
+    await page.dismissCommonOverlays();          // heuristique déterministe
 
     const items = await page.extractAll({
       selector: ".publication",
@@ -289,29 +291,21 @@ export default workflow({
 
 Propriétés voulues : le workflow **déclare** son intention ; le runtime détient les
 budgets, la persistance, la provenance et les événements. Le workflow ne connaît ni
-SQLite, ni le CDP, ni le proxy, ni le LLM.
+SQLite, ni le CDP, ni le proxy, ni les décisions de l'agent externe.
 
 ---
 
 ## 7. Modèle de recovery
 
 ```text
-L0  script déterministe          — chemin nominal, 0 appel LLM
-L1  heuristiques locales         — bannières cookies, modales, scroll, retry
-L2  LLM sur DOM / arbre a11y     — texte seul, contexte minimal
-L3  LLM multimodal + screenshot  — dernier recours, le plus coûteux
+L0  script déterministe          — chemin nominal
+L1  heuristiques locales         — bannières cookies, modales, scroll
 L4  échec explicite              — journalisé, rapporté, arrêt propre
 ```
 
-L'escalade est **monotone et budgétée**. `recover()` reçoit un objectif, un état
-attendu, une liste blanche d'actions et un `maxSteps` ; il retourne le contrôle au
-script dès que l'état attendu est atteint. Le provider LLM est une interface
-(`LlmProvider`) ; OpenRouter est le premier adaptateur, tout endpoint
-OpenAI-compatible est accepté ; la clé vit dans la configuration ou les secrets, jamais
-dans le code.
-
-Un point retenu de l'upstream : le contexte du modèle est élagué par **unités
-atomiques** (message assistant + ses résultats d'outils), jamais message par message.
+Le recovery applique une liste blanche d'heuristiques, puis retourne le contrôle au
+script dès que l'état attendu est atteint. Sinon il échoue explicitement ; l'appelant
+externe exploite alors le rapport pour décider de la suite.
 
 ---
 

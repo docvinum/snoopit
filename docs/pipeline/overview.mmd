@@ -28,7 +28,6 @@ flowchart TD
   %% ── Pour chaque job dû : charger, attacher ────────────────────────────────
   subgraph ATTACH["Chargement & attache (boucle sur les jobs dus)"]
     loadwf["workflow/load.ts:43<br/>loadWorkflow() — import dynamique"]
-    provider["recovery/llm/from-config.ts:21<br/>providerFromConfig()"]
     connect["browser/cdp.ts:344<br/>CdpBackend.connect() — connectOverCDP"]
   end
 
@@ -64,12 +63,11 @@ flowchart TD
     chrome(["Chrome persistant<br/>127.0.0.1:9222 — profil authentifié"])
   end
 
-  %% ── Recovery (exception, hors chemin nominal) ─────────────────────────────
+  %% ── Recovery déterministe (exception, hors chemin nominal) ───────────────
   subgraph REC["Recovery — exception, jamais nominal"]
-    recfn["recovery/recover.ts:216<br/>recover() — L1→L2→L3→L4 &nbsp;(détail)"]
+    recfn["recovery/recover.ts<br/>recover() — heuristiques → échec explicite &nbsp;(détail)"]
     heur["recovery/heuristics.ts:233<br/>dismissOverlays() · collectControls()"]
     block["recovery/blocking.ts:95<br/>detectBlocking() → BlockedError"]
-    llm["recovery/llm/openai-compatible.ts:50<br/>OpenAiCompatibleProvider.complete()"]
   end
 
   %% ── Collecte de fichiers ──────────────────────────────────────────────────
@@ -91,7 +89,7 @@ flowchart TD
   %% ── Flux principal ───────────────────────────────────────────────────────
   tick --> loadcfg --> db --> store --> due
   due --> window
-  due -->|"job dû + pagesPerRun"| loadwf --> provider --> connect --> reclaim
+  due -->|"job dû + pagesPerRun"| loadwf --> connect --> reclaim
   connect -.-> chrome
 
   reclaim --> startrun --> emitter --> heartbeat --> guard --> ctxbuild --> invoke
@@ -117,7 +115,6 @@ flowchart TD
   recfn --> heur
   recfn --> block
   recfn --> interact
-  recfn --> llm
 
   %% écritures d'état (tous les nœuds ci-dessous écrivent dans SQLite)
   due --> repos
@@ -132,7 +129,7 @@ flowchart TD
 
   %% ── Navigation vers les diagrammes de détail ─────────────────────────────
   click window "./window.mmd" "Détail : décision « est-ce dû ? »"
-  click recfn "./recover.mmd" "Détail : escalade de recovery L1→L4"
+  click recfn "./recover.mmd" "Détail : recovery déterministe"
   click cdppage "./cdp.mmd" "Détail : CdpPage / CdpBackend"
   click visit "./context.mmd" "Détail : primitives du RunContext"
   click frontier "./context.mmd" "Détail : primitives du RunContext"

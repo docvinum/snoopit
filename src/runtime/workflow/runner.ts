@@ -25,7 +25,6 @@ import {
 } from '../budget/guard.js';
 import { BlockedError } from '../recovery/blocking.js';
 import { AuthRequiredError } from '../navigation/session.js';
-import type { LlmProvider } from '../recovery/llm/provider.js';
 import { isoFromNow } from '../../util/time.js';
 import { RunContext } from './context.js';
 import type { WorkflowDefinition } from './types.js';
@@ -53,8 +52,6 @@ export interface RunWorkflowOptions {
   readonly staleAfterMs?: number;
   /** Cap on frontier entries this run may claim, from the job's `pagesPerRun`. */
   readonly pagesPerRun?: number | null;
-  /** Absent means recovery stops at L1 — a valid, fully supported configuration. */
-  readonly llm?: LlmProvider | null;
   readonly onLine?: (line: string) => void;
 }
 
@@ -165,7 +162,6 @@ export async function runWorkflow<T>(
     dataDir,
     budget: guard,
     pagesPerRun: options.pagesPerRun ?? null,
-    llm: options.llm ?? null,
   });
 
   let result: unknown = null;

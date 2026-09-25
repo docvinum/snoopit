@@ -151,11 +151,11 @@ interstitiel DataDome, `ctx.visit` arrête le run et le rapporte (`blocked:<rais
 code de sortie 3) : **on ne contourne pas** la protection, ni par rotation d'identité
 ni par autre moyen.
 
-### 1.5 Clé LLM (optionnelle)
+### 1.5 Recovery et agent externe
 
-Sans `SNOOPIT_LLM_API_KEY` dans `/etc/snoopit/snoopit.env`, la recovery s'arrête à
-L1 — suffisant pour une bannière ou une modale. Une clé L2 aide quand la structure
-de la page bouge ; le chemin nominal reste à zéro appel.
+Le recovery de snoopit ferme les overlays connus et peut faire défiler la page. Si
+cela ne suffit pas, le run échoue avec un rapport exploitable par l'agent externe ;
+snoopit ne contacte aucun modèle et ne détient aucune clé d'agent.
 
 ### 1.6 Planification : `schedule_json` sur la ligne `jobs`
 
@@ -220,7 +220,7 @@ résumés, lien vers les résultats, compteur éventuel de nouvelles annonces.
 Attends ma validation avant l'étape 2.
 
 ── Étape 2 : le workflow ──
-Type `collect`. budget: { maxPages: 40, maxDuration: '15m', maxLlmCalls: 0 }.
+Type `collect`. budget: { maxPages: 40, maxDuration: '15m' }.
 Patron deux phases (découverte → collecte) du SKILL.
 
 Phase 1 — découverte :
@@ -261,7 +261,7 @@ return {
 
 Contraintes fermes :
   - aucun identifiant dans le code ni la config ;
-  - maxLlmCalls: 0 sur le chemin nominal ;
+  - aucun modèle ni secret d'agent dans snoopit ;
   - face à un 403 / CAPTCHA / DataDome : laisse le runtime arrêter et rapporter,
     aucun contournement, aucune rotation d'identité ;
   - ferme toujours tes pages dans un finally ;

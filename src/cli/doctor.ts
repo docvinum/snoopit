@@ -11,7 +11,6 @@
 
 import { existsSync } from 'node:fs';
 import type { LoadedConfig } from '../config/load.js';
-import { llmApiKey } from '../config/load.js';
 import { MIN_TOKEN_LENGTH } from '../runtime/browser/extension/handshake.js';
 import { MIGRATIONS } from '../state/migrations.js';
 import { Store } from '../state/store.js';
@@ -136,23 +135,6 @@ function checkWorkflows(): Check {
     : { name: 'workflows', status: 'ok', detail: names.join(', ') };
 }
 
-function checkLlm(loaded: LoadedConfig, env: NodeJS.ProcessEnv): Check {
-  const key = llmApiKey(loaded.config, env);
-  return key === null
-    ? {
-        name: 'llm',
-        status: 'warn',
-        // Not a failure: a nominal run makes no model call, and L1 handles most surprises.
-        detail: `no key in ${loaded.config.llm.apiKeyEnv} — recovery stops at L1`,
-        remedy: `set ${loaded.config.llm.apiKeyEnv} to enable L2/L3 recovery`,
-      }
-    : {
-        name: 'llm',
-        status: 'ok',
-        detail: `${loaded.config.llm.provider}/${loaded.config.llm.model}`,
-      };
-}
-
 /**
  * The extension backend has no Chrome to probe from here: the extension connects
  * only while a run holds the endpoint open. What can be checked is the pairing
@@ -195,7 +177,7 @@ export async function runDoctor(
           checkCdpBinding(loaded.config.browser.cdpUrl),
           await checkChrome(loaded.config.browser.cdpUrl),
         ];
-  return [...browser, ...checkDatabase(loaded.paths), checkWorkflows(), checkLlm(loaded, env)];
+  return [...browser, ...checkDatabase(loaded.paths), checkWorkflows()];
 }
 
 export function formatChecks(checks: readonly Check[]): string {

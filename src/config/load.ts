@@ -41,15 +41,20 @@ function applyEnvOverrides(raw: Record<string, unknown>, env: NodeJS.ProcessEnv)
   if (cdpUrl !== undefined && cdpUrl !== '') {
     raw['browser'] = { ...(raw['browser'] as object | undefined), cdpUrl };
   }
+}
 
-  const llmModel = env['SNOOPIT_LLM_MODEL'];
-  const llmBaseUrl = env['SNOOPIT_LLM_BASE_URL'];
-  if (llmModel !== undefined || llmBaseUrl !== undefined) {
-    raw['llm'] = {
-      ...(raw['llm'] as object | undefined),
-      ...(llmModel !== undefined && llmModel !== '' ? { model: llmModel } : {}),
-      ...(llmBaseUrl !== undefined && llmBaseUrl !== '' ? { baseUrl: llmBaseUrl } : {}),
-    };
+/**
+ * Configuration written before 2026-09-25 can still contain local-model
+ * settings. They are deliberately discarded during loading: models belong to
+ * the caller of snoopit, not to its runtime. Keeping this one-way migration
+ * lets an installed instance upgrade before its YAML is cleaned up.
+ */
+function discardLegacyLlmSettings(raw: Record<string, unknown>): void {
+  delete raw['llm'];
+
+  const budget = raw['defaultBudget'];
+  if (budget !== null && typeof budget === 'object' && !Array.isArray(budget)) {
+    delete (budget as Record<string, unknown>)['maxLlmCalls'];
   }
 }
 
@@ -90,6 +95,7 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
     }
   }
 
+  discardLegacyLlmSettings(raw);
   applyEnvOverrides(raw, env);
 
   const result = configSchema.safeParse(raw);
@@ -104,20 +110,3 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
 
   return { config: result.data, sourcePath, paths: resolvePaths(result.data, cwd) };
 }
-
-/**
- * Reads the LLM API key from the environment variable the config points at.
- *
- * Returns `null` when unset. A missing key is only an error at the moment an L2/L3
- * recovery is actually attempted — a nominal run makes no LLM call at all, and must
- * not require a key to start.
- */
-export function llmApiKey(config: Config, env: NodeJS.ProcessEnv = process.env): string | null {
-  const value = env[config.llm.apiKeyEnv];
-  return value === undefined || value === '' ? null : value;
-}
-
-// Note: there is deliberately no `redactConfig()` helper. The config object holds no
-// secret to redact — `llm.apiKeyEnv` is the *name* of an environment variable, and the
-// key itself is read on demand by `llmApiKey()` and never stored on the config. A
-// redaction helper here would imply secrets flow through this object; they do not.

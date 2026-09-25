@@ -111,12 +111,10 @@ describe('RunRepository', () => {
     store.runs.increment(run.id, 'pagesVisited', 3);
     store.runs.increment(run.id, 'pagesVisited');
     store.runs.increment(run.id, 'downloadedBytes', 2048);
-    store.runs.increment(run.id, 'llmCalls');
 
     const counters = store.runs.get(run.id)!.counters;
     expect(counters.pagesVisited).toBe(4);
     expect(counters.downloadedBytes).toBe(2048);
-    expect(counters.llmCalls).toBe(1);
     expect(counters.errorCount).toBe(0);
   });
 

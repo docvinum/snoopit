@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { loadConfig, llmApiKey } from '../../src/config/load.js';
+import { loadConfig } from '../../src/config/load.js';
 
 function withConfigFile(contents: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'snoopit-config-'));
@@ -19,7 +19,6 @@ describe('loadConfig', () => {
 
     expect(sourcePath).toBeNull();
     expect(config.browser.cdpUrl).toBe('http://127.0.0.1:9222');
-    expect(config.llm.apiKeyEnv).toBe('SNOOPIT_LLM_API_KEY');
     expect(paths.databaseFile).toBe(resolve(dir, 'data', 'snoopit.db'));
     expect(paths.jobsDir).toBe(resolve(dir, 'data', 'jobs'));
   });
@@ -66,6 +65,19 @@ browser:
     expect(() => loadConfig({ cwd: dir, env: EMPTY_ENV })).toThrow(/Invalid configuration/);
   });
 
+  it('ignores legacy local-model settings during an upgrade', () => {
+    const dir = withConfigFile(`
+llm:
+  apiKeyEnv: SNOOPIT_LLM_API_KEY
+  model: old-model
+defaultBudget:
+  maxPages: 12
+  maxLlmCalls: 3
+`);
+    const { config } = loadConfig({ cwd: dir, env: EMPTY_ENV });
+    expect(config.defaultBudget).toEqual({ maxPages: 12 });
+  });
+
   it('names the offending field on a validation failure', () => {
     const dir = withConfigFile('browser:\n  cdpUrl: not-a-url\n');
     expect(() => loadConfig({ cwd: dir, env: EMPTY_ENV })).toThrow(/browser\.cdpUrl/);
@@ -106,36 +118,5 @@ browser:
     const dir = mkdtempSync(join(tmpdir(), 'snoopit-budget-'));
     const { config } = loadConfig({ cwd: dir, env: EMPTY_ENV });
     expect(config.defaultBudget.maxPages).toBe(100);
-    expect(config.defaultBudget.maxLlmCalls).toBe(3);
-  });
-});
-
-describe('secrets', () => {
-  it('never stores the API key in the config, only the variable name', () => {
-    const dir = withConfigFile('llm:\n  apiKeyEnv: MY_KEY\n');
-    const { config } = loadConfig({ cwd: dir, env: { MY_KEY: 'sk-secret' } });
-
-    expect(config.llm.apiKeyEnv).toBe('MY_KEY');
-    // The secret must not be reachable by walking the config object.
-    expect(JSON.stringify(config)).not.toContain('sk-secret');
-  });
-
-  it('reads the key from the named variable on demand', () => {
-    const dir = withConfigFile('llm:\n  apiKeyEnv: MY_KEY\n');
-    const { config } = loadConfig({ cwd: dir, env: { MY_KEY: 'sk-secret' } });
-    expect(llmApiKey(config, { MY_KEY: 'sk-secret' })).toBe('sk-secret');
-  });
-
-  it('returns null when unset, so a nominal run needs no key', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'snoopit-nokey-'));
-    const { config } = loadConfig({ cwd: dir, env: EMPTY_ENV });
-    expect(llmApiKey(config, EMPTY_ENV)).toBeNull();
-    expect(llmApiKey(config, { SNOOPIT_LLM_API_KEY: '' })).toBeNull();
-  });
-
-  it('rejects an inline apiKey field outright', () => {
-    // Strict schemas mean a key pasted into the file is an error, not a convenience.
-    const dir = withConfigFile('llm:\n  apiKey: sk-oops\n');
-    expect(() => loadConfig({ cwd: dir, env: EMPTY_ENV })).toThrow(/Invalid configuration/);
   });
 });

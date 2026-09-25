@@ -80,12 +80,6 @@ browser:
   # Loopback only. This port grants full control of an authenticated browser.
   cdpUrl: http://127.0.0.1:9222
 
-llm:
-  # Recovery stops at L1 when no key is set, which is a supported configuration.
-  provider: openrouter
-  baseUrl: https://openrouter.ai/api/v1
-  model: anthropic/claude-sonnet-4.6
-  apiKeyEnv: SNOOPIT_LLM_API_KEY
 YAML
   chown root:"$SERVICE_USER" "$CONFIG_DIR/snoopit.config.yaml"
   chmod 0640 "$CONFIG_DIR/snoopit.config.yaml"
@@ -93,7 +87,7 @@ fi
 
 if [[ ! -f "$CONFIG_DIR/snoopit.env" ]]; then
   say "Writing empty secrets file"
-  printf '# Secrets for snoopit. Readable only by the service user.\n#SNOOPIT_LLM_API_KEY=\n#SNOOPIT_EXTENSION_TOKEN=\n' \
+  printf '# Secrets for snoopit. Readable only by the service user.\n#SNOOPIT_EXTENSION_TOKEN=\n' \
     > "$CONFIG_DIR/snoopit.env"
   chown root:"$SERVICE_USER" "$CONFIG_DIR/snoopit.env"
   chmod 0640 "$CONFIG_DIR/snoopit.env"

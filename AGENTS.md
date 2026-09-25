@@ -12,8 +12,9 @@ comme moteur d'exécution. Il visite des sites régulièrement, se souvient de c
 qu'il a vu, reprend un crawl interrompu, et collecte des contenus avec leur
 provenance.
 
-**Ce n'est pas un agent LLM.** La navigation est déterministe et scriptable. Un
-modèle n'intervient qu'en récupération, après échec des heuristiques.
+**Ce n'est pas un agent LLM.** La navigation et le recovery sont déterministes et
+scriptables. Un agent externe appelle snoopit et interprète ses rapports ; snoopit ne
+contacte jamais de modèle.
 
 ---
 
@@ -73,10 +74,9 @@ exécute.
 2. **Seul `src/runtime/browser/cdp.ts` importe `playwright-core`.** Aucun workflow,
    aucune règle métier ne construit une commande CDP. Le code qui s'exécute *dans la
    page* vit dans `page-functions.ts`, partagé par les moteurs CDP et extension.
-3. **Aucun secret dans un objet de configuration.** La clé LLM est désignée par le
-   *nom* d'une variable d'environnement.
-4. **Le LLM n'est pas dans le chemin nominal.** Un run normal fait zéro appel. Si
-   votre changement en ajoute un, justifiez-le explicitement.
+3. **Aucun secret d'agent dans la configuration.** Les identifiants appartiennent au
+   processus externe qui appelle snoopit.
+4. **Le runtime n'appelle jamais de modèle.** Un agent pilote snoopit de l'extérieur.
 
 ---
 
@@ -85,7 +85,7 @@ exécute.
 Si l'un de ces points devient vrai, quelque chose a dérivé :
 
 1. Un workflow importe du CDP ou de Playwright → l'abstraction a fui.
-2. Un run nominal appelle le LLM → dérive vers le pattern qu'on a rejeté.
+2. Le runtime appelle un modèle → la frontière avec l'agent externe est rompue.
 3. Un test de logique métier exige un vrai navigateur → mauvais placement.
 4. De l'état vit ailleurs que dans SQLite → la source de vérité est enfreinte.
 5. La reprise dépend d'un numéro de page → l'identité est l'URL canonique.
@@ -98,7 +98,7 @@ Si l'un de ces points devient vrai, quelque chose a dérivé :
 - `tests/integration/` — plusieurs modules, sur SQLite `:memory:`.
 - `tests/e2e/` — parcours complets contre les fixtures locales.
 
-**Aucun test ne touche un site tiers, ni un vrai fournisseur LLM.** Les tests qui
+**Aucun test ne touche un site tiers, ni un fournisseur de modèle.** Les tests qui
 exigent Chrome se sautent proprement quand il est absent ; le reste doit passer
 sans navigateur — c'est la preuve que l'abstraction tient.
 

@@ -190,14 +190,11 @@ describe('budget enforcement', () => {
     expect(outcome.run.counters.errorCount).toBe(2);
   });
 
-  it('does not let a zero LLM budget block a nominal run', async () => {
-    // Declaring `maxLlmCalls: 0` states that the workflow uses no LLM. It must not
-    // prevent the workflow from doing its ordinary, LLM-free work.
-    const outcome = await run(walker(3), { maxPages: 10, maxLlmCalls: 0 });
+  it('runs normally without any model configuration', async () => {
+    const outcome = await run(walker(3), { maxPages: 10 });
     expect(outcome.run.status).toBe('completed');
     expect(outcome.run.stopReason).toBe('done');
     expect(outcome.run.counters.pagesVisited).toBe(3);
-    expect(outcome.run.counters.llmCalls).toBe(0);
   });
 
   it('bounds a frontier batch by what is left of the budget', async () => {
